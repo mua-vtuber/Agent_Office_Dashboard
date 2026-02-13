@@ -50,15 +50,23 @@ export function SettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
-  const setLanguage = useUiSettingsStore((s) => s.setLanguage);
-  const setMotion = useUiSettingsStore((s) => s.setMotion);
+  const setAllUi = useUiSettingsStore((s) => s.setAll);
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
+  const [draftLanguage, setDraftLanguage] = useState<"ko" | "en">(language);
+  const [draftMotion, setDraftMotion] = useState<"low" | "normal" | "high">(motion);
+  const [draftLayoutProfile, setDraftLayoutProfile] = useState<string>("kr_t_left_v2");
+  const [saveMessage, setSaveMessage] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string>("");
 
   // Thought bubble settings
   const [tbForm, setTbForm] = useState<ThoughtBubbleForm>(THOUGHT_BUBBLE_DEFAULTS);
   const [tbSaveMsg, setTbSaveMsg] = useState<string>("");
+
+  const hasDirty =
+    draftLanguage !== language || draftMotion !== motion || draftLayoutProfile !== "kr_t_left_v2";
 
   const refreshStatus = async (): Promise<void> => {
     try {
@@ -87,6 +95,69 @@ export function SettingsPage(): JSX.Element {
     })();
     void refreshStatus();
   }, []);
+
+  useEffect(() => {
+    if (loaded) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const res = await fetch(`${BACKEND_ORIGIN}/api/settings`);
+        const json = (await res.json()) as {
+          settings?: {
+            ui_language?: "ko" | "en";
+            ui_motion?: "low" | "normal" | "high";
+            layout_profile?: string;
+          };
+        };
+        if (!mounted) return;
+        const serverLanguage = json.settings?.ui_language ?? language;
+        const serverMotion = json.settings?.ui_motion ?? motion;
+        const serverLayout = json.settings?.layout_profile ?? "kr_t_left_v2";
+        setAllUi({ language: serverLanguage, motion: serverMotion });
+        setDraftLanguage(serverLanguage);
+        setDraftMotion(serverMotion);
+        setDraftLayoutProfile(serverLayout);
+        setLoaded(true);
+      } catch (e) {
+        if (mounted) {
+          setError(e instanceof Error ? e.message : "failed to load settings");
+          setLoaded(true);
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [language, loaded, motion, setAllUi]);
+
+  const saveSettings = async (): Promise<void> => {
+    setSaving(true);
+    setSaveMessage("");
+    setError("");
+    try {
+      const res = await fetch(`${BACKEND_ORIGIN}/api/settings`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          settings: {
+            ui_language: draftLanguage,
+            ui_motion: draftMotion,
+            layout_profile: draftLayoutProfile
+          }
+        })
+      });
+      const json = (await res.json()) as { ok?: boolean };
+      if (!res.ok || !json.ok) {
+        throw new Error("failed to save settings");
+      }
+      setAllUi({ language: draftLanguage, motion: draftMotion });
+      setSaveMessage(t("settings_saved"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const installHooks = async (mode: "guide" | "write"): Promise<void> => {
     setInstallResult(null);
@@ -149,20 +220,31 @@ export function SettingsPage(): JSX.Element {
           <p>{t("settings_lang_motion_desc")}</p>
           <label>
             {t("settings_language")}
-            <select value={language} onChange={(e) => setLanguage(e.target.value as "ko" | "en")}>
+            <select value={draftLanguage} onChange={(e) => setDraftLanguage(e.target.value as "ko" | "en")}>
               <option value="ko">한국어</option>
               <option value="en">English</option>
             </select>
           </label>
           <label>
             {t("settings_motion")}
-            <select value={motion} onChange={(e) => setMotion(e.target.value as "low" | "normal" | "high")}>
+            <select value={draftMotion} onChange={(e) => setDraftMotion(e.target.value as "low" | "normal" | "high")}>
               <option value="low">low</option>
               <option value="normal">normal</option>
               <option value="high">high</option>
             </select>
           </label>
-          <p>{t("settings_layout_profile")}: kr_t_left_v2</p>
+          <label>
+            {t("settings_layout_profile")}
+            <select value={draftLayoutProfile} onChange={(e) => setDraftLayoutProfile(e.target.value)}>
+              <option value="kr_t_left_v2">kr_t_left_v2</option>
+            </select>
+          </label>
+          <div className="action-row">
+            <button className="list-btn" onClick={() => void saveSettings()} disabled={saving || !hasDirty}>
+              {saving ? t("common_loading") : t("settings_btn_save")}
+            </button>
+          </div>
+          {saveMessage ? <p>{saveMessage}</p> : null}
         </article>
 
         <article className="panel">

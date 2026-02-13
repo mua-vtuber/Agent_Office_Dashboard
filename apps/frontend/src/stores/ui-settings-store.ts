@@ -6,6 +6,7 @@ type MotionLevel = "low" | "normal" | "high";
 type UiSettingsState = {
   language: Language;
   motion: MotionLevel;
+  setAll: (next: { language: Language; motion: MotionLevel }) => void;
   setLanguage: (language: Language) => void;
   setMotion: (motion: MotionLevel) => void;
 };
@@ -39,6 +40,10 @@ const initial = loadInitial();
 export const useUiSettingsStore = create<UiSettingsState>((set, get) => ({
   language: initial.language,
   motion: initial.motion,
+  setAll: (next) => {
+    set({ language: next.language, motion: next.motion });
+    save(next);
+  },
   setLanguage: (language) => {
     set({ language });
     const state = get();
