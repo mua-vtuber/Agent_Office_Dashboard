@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 type EmploymentType = "employee" | "contractor";
 
@@ -36,6 +37,7 @@ function badge(type: EmploymentType): string {
 }
 
 export function AgentsPage(): JSX.Element {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
@@ -163,8 +165,8 @@ export function AgentsPage(): JSX.Element {
 
   return (
     <section>
-      <h2>Agents</h2>
-      <p>저장 에이전트는 정직원, 임시 호출 에이전트는 계약직으로 표시합니다.</p>
+      <h2>{t("agents_title")}</h2>
+      <p>{t("agents_subtitle")}</p>
       {error ? <p className="error">{error}</p> : null}
       <div className="scope-bar">
         <label>
@@ -202,18 +204,18 @@ export function AgentsPage(): JSX.Element {
 
       <div className="filter-row">
         <label>
-          고용형태 필터
+          {t("agents_filter_employment")}
           <select value={employmentFilter} onChange={(e) => setEmploymentFilter(e.target.value as "all" | EmploymentType)}>
-            <option value="all">전체</option>
-            <option value="employee">정직원</option>
-            <option value="contractor">계약직</option>
+            <option value="all">{t("common_all")}</option>
+            <option value="employee">{t("agents_employee")}</option>
+            <option value="contractor">{t("agents_contractor")}</option>
           </select>
         </label>
       </div>
 
       <div className="split-layout">
         <aside className="panel">
-          <h3>목록</h3>
+          <h3>{t("agents_list")}</h3>
           <ul className="list">
             {filteredAgents.map((a) => (
               <li key={a.agent_id}>
@@ -223,21 +225,35 @@ export function AgentsPage(): JSX.Element {
               </li>
             ))}
           </ul>
-          {filteredAgents.length === 0 ? <p>표시할 에이전트가 없습니다.</p> : null}
+          {filteredAgents.length === 0 ? <p>{t("agents_empty")}</p> : null}
         </aside>
 
         <article className="panel">
-          <h3>상세</h3>
+          <h3>{t("agents_detail")}</h3>
           {!detail ? (
-            <p>에이전트를 선택하세요.</p>
+            <p>{t("agents_select_prompt")}</p>
           ) : (
             <div>
               <p><strong>{detail.display_name}</strong> ({detail.agent_id})</p>
-              <p>역할: {detail.role} / 고용형태: {badge(detail.employment_type)} / 상태: {detail.status}</p>
+              <p>{t("agents_meta", { role: detail.role, employment: badge(detail.employment_type), status: detail.status })}</p>
               <p>{detail.intro}</p>
-              <p>도구: {detail.tools.join(", ")}</p>
-              <p>전문영역: {detail.expertise.join(", ")}</p>
-              <h4>최근 이벤트</h4>
+              <p>{t("agents_tools")}: {detail.tools.join(", ")}</p>
+              <p>{t("agents_expertise")}: {detail.expertise.join(", ")}</p>
+              <p>
+                <Link
+                  to={{
+                    pathname: "/",
+                    search: (() => {
+                      const params = new URLSearchParams(searchParams);
+                      params.set("agent_id", detail.agent_id);
+                      return params.toString() ? `?${params.toString()}` : "";
+                    })()
+                  }}
+                >
+                  {t("agents_go_office")}
+                </Link>
+              </p>
+              <h4>{t("agents_recent_events")}</h4>
               <pre className="panel nested">{JSON.stringify(detail.recent_events, null, 2)}</pre>
             </div>
           )}

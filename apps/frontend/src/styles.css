@@ -116,6 +116,10 @@ body {
   box-shadow: 0 0 0 3px rgba(23, 104, 172, 0.35);
 }
 
+.focus-panel {
+  margin-top: 12px;
+}
+
 .agent-body {
   position: absolute;
   inset: 0;

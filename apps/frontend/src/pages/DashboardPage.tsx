@@ -3,6 +3,7 @@ import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
 import { BACKEND_ORIGIN } from "../lib/constants";
 import { Link, useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 type SnapshotAgent = {
   agent_id: string;
@@ -57,6 +58,7 @@ function eventSummary(e: EventRow): string {
 }
 
 export function DashboardPage(): JSX.Element {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const events = useEventStore((s) => s.events) as EventRow[];
   const setAllEvents = useEventStore((s) => s.setAll);
@@ -146,10 +148,7 @@ export function DashboardPage(): JSX.Element {
   }, [selectedEventId]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
-  const workspaceOptions = useMemo(
-    () => Array.from(new Set(scopes.map((s) => s.workspace_id))),
-    [scopes]
-  );
+  const workspaceOptions = useMemo(() => Array.from(new Set(scopes.map((s) => s.workspace_id))), [scopes]);
   const terminalOptions = useMemo(() => {
     if (!selectedWorkspace) return scopes;
     return scopes.filter((s) => s.workspace_id === selectedWorkspace);
@@ -184,14 +183,14 @@ export function DashboardPage(): JSX.Element {
 
   return (
     <section>
-      <h2>Dashboard</h2>
-      <p>상태 카드 + 타임라인 + Time Travel(전후 문맥) 패널.</p>
+      <h2>{t("dashboard_title")}</h2>
+      <p>{t("dashboard_subtitle")}</p>
       {error ? <p className="error">{error}</p> : null}
       <div className="scope-bar">
         <label>
           Workspace
           <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
-            <option value="">All</option>
+            <option value="">{t("common_all")}</option>
             {workspaceOptions.map((w) => (
               <option key={w} value={w}>{w}</option>
             ))}
@@ -200,7 +199,7 @@ export function DashboardPage(): JSX.Element {
         <label>
           Terminal
           <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
-            <option value="">All</option>
+            <option value="">{t("common_all")}</option>
             {terminalOptions.map((s) => (
               <option key={`${s.workspace_id}:${s.terminal_session_id}`} value={s.terminal_session_id}>
                 {s.terminal_session_id}
@@ -211,7 +210,7 @@ export function DashboardPage(): JSX.Element {
         <label>
           Run
           <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
-            <option value="">All</option>
+            <option value="">{t("common_all")}</option>
             {runOptions.map((s) => (
               <option key={`${s.workspace_id}:${s.terminal_session_id}:${s.run_id}`} value={s.run_id}>
                 {s.run_id}
@@ -222,34 +221,34 @@ export function DashboardPage(): JSX.Element {
       </div>
       {integration && !integration.hooks_configured ? (
         <div className="hooks-banner">
-          Hooks 미설정 상태입니다. 현재 모드: {integration.mode}. 실시간 정확도가 낮을 수 있습니다.
-          <Link to="/settings"> 설정에서 안내/설치</Link>
+          {t("dashboard_hooks_missing", { mode: integration.mode })}
+          <Link to="/settings"> {t("dashboard_open_settings")}</Link>
         </div>
       ) : null}
 
       <div className="stats-grid">
         <article className="stat-card">
-          <div className="stat-label">총 에이전트</div>
+          <div className="stat-label">{t("dashboard_stat_total_agents")}</div>
           <div className="stat-value">{agents.length}</div>
         </article>
         <article className="stat-card">
-          <div className="stat-label">실패</div>
+          <div className="stat-label">{t("dashboard_stat_failed")}</div>
           <div className="stat-value">{agents.filter((a) => a.status === "failed").length}</div>
         </article>
         <article className="stat-card">
-          <div className="stat-label">작업중</div>
+          <div className="stat-label">{t("dashboard_stat_working")}</div>
           <div className="stat-value">{agents.filter((a) => a.status === "working" || a.status === "meeting").length}</div>
         </article>
         <article className="stat-card">
-          <div className="stat-label">이벤트(표시)</div>
+          <div className="stat-label">{t("dashboard_stat_events")}</div>
           <div className="stat-value">{events.length}</div>
         </article>
       </div>
 
-      <h3>Agent Status Cards</h3>
+      <h3>{t("dashboard_agent_cards")}</h3>
       <div className="agent-card-grid">
         {agents.length === 0 ? (
-          <p>에이전트가 없습니다. seed-mock를 실행해보세요.</p>
+          <p>{t("dashboard_agents_empty")}</p>
         ) : (
           agents.map((agent) => (
             <article key={agent.agent_id} className="agent-card">
@@ -265,14 +264,11 @@ export function DashboardPage(): JSX.Element {
 
       <div className="split-layout">
         <article className="panel">
-          <h3>Recent Events</h3>
+          <h3>{t("dashboard_recent_events")}</h3>
           <ul className="list timeline-list">
             {events.slice(0, 40).map((evt) => (
               <li key={evt.id}>
-                <button
-                  className={evt.id === selectedEventId ? "list-btn active" : "list-btn"}
-                  onClick={() => setSelectedEventId(evt.id)}
-                >
+                <button className={evt.id === selectedEventId ? "list-btn active" : "list-btn"} onClick={() => setSelectedEventId(evt.id)}>
                   {eventSummary(evt)}
                 </button>
               </li>
@@ -281,9 +277,9 @@ export function DashboardPage(): JSX.Element {
         </article>
 
         <article className="panel">
-          <h3>Time Travel Context</h3>
-          {!selectedEventId ? <p>이벤트를 선택하세요.</p> : null}
-          {loadingContext ? <p>불러오는 중...</p> : null}
+          <h3>{t("dashboard_time_travel_title")}</h3>
+          {!selectedEventId ? <p>{t("dashboard_select_event_prompt")}</p> : null}
+          {loadingContext ? <p>{t("common_loading")}</p> : null}
           {context ? (
             <div className="context-grid">
               <div className="context-col">
@@ -297,7 +293,7 @@ export function DashboardPage(): JSX.Element {
               <div className="context-col">
                 <h4>Pivot</h4>
                 <p className="pivot-line">{eventSummary(context.pivot)}</p>
-                <h4>Agent Snapshot</h4>
+                <h4>{t("dashboard_agent_snapshot")}</h4>
                 <p>{context.agent_snapshot.agent_id}</p>
                 <p>status: {context.agent_snapshot.status}</p>
                 <p>events until pivot: {context.agent_snapshot.event_count_until_pivot}</p>

@@ -92,12 +92,20 @@ export function OfficePage(): JSX.Element {
   const [positions, setPositions] = useState<PositionMap>({});
   const lastTsRef = useRef<number>(performance.now());
   const focusedAgentId = searchParams.get("agent_id") ?? "";
+  const selectedWorkspace = searchParams.get("workspace_id") ?? "";
+  const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
+  const selectedRun = searchParams.get("run_id") ?? "";
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
-        const res = await fetch(`${BACKEND_ORIGIN}/api/snapshot`);
+        const query = new URLSearchParams();
+        if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
+        if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
+        if (selectedRun) query.set("run_id", selectedRun);
+        const suffix = query.toString() ? `?${query.toString()}` : "";
+        const res = await fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`);
         const json = (await res.json()) as { agents?: AgentView[] };
         if (mounted && Array.isArray(json.agents)) {
           setManyAgents(json.agents);
@@ -109,7 +117,7 @@ export function OfficePage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [setManyAgents]);
+  }, [setManyAgents, selectedWorkspace, selectedTerminal, selectedRun]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setRoamTick((v) => v + 1), 5000);
@@ -125,6 +133,10 @@ export function OfficePage(): JSX.Element {
   const targets = useMemo(() => {
     return Object.fromEntries(agents.map((agent) => [agent.agent_id, targetByStatus(agent, workers, roamTick)]));
   }, [agents, workers, roamTick]);
+  const focusedAgent = useMemo(
+    () => agents.find((a) => a.agent_id === focusedAgentId) ?? null,
+    [agents, focusedAgentId]
+  );
 
   useEffect(() => {
     let frame = 0;
@@ -207,6 +219,15 @@ export function OfficePage(): JSX.Element {
           );
         })}
       </div>
+      {focusedAgent ? (
+        <article className="panel focus-panel">
+          <h3>Focus Agent</h3>
+          <p><strong>{focusedAgent.agent_id}</strong></p>
+          <p>status: {focusedAgent.status}</p>
+          <p>last event: {focusedAgent.last_event_ts}</p>
+          <p>현재 선택된 에이전트는 오피스에서 하이라이트됩니다.</p>
+        </article>
+      ) : null}
     </section>
   );
 }
