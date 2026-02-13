@@ -112,6 +112,10 @@ body {
   transform: translate(-50%, -50%);
 }
 
+.office-agent.focused .agent-body {
+  box-shadow: 0 0 0 3px rgba(23, 104, 172, 0.35);
+}
+
 .agent-body {
   position: absolute;
   inset: 0;
@@ -217,6 +221,16 @@ body {
   0% { opacity: 0; transform: translateY(2px); }
   50% { opacity: 1; transform: translateY(-2px); }
   100% { opacity: 0; transform: translateY(-6px); }
+}
+
+:root[data-motion="low"] .office-agent.failed .agent-body,
+:root[data-motion="low"] .paper span,
+:root[data-motion="low"] .state-icon.zzz {
+  animation: none !important;
+}
+
+:root[data-motion="high"] .office-agent.failed .agent-body {
+  animation-duration: 0.15s;
 }
 
 .error {

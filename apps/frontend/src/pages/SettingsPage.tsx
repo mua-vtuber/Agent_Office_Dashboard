@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
+import { useUiSettingsStore } from "../stores/ui-settings-store";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
@@ -20,7 +21,10 @@ type InstallResult = {
 };
 
 export function SettingsPage(): JSX.Element {
-  const [language, setLanguage] = useState<"ko" | "en">("ko");
+  const language = useUiSettingsStore((s) => s.language);
+  const motion = useUiSettingsStore((s) => s.motion);
+  const setLanguage = useUiSettingsStore((s) => s.setLanguage);
+  const setMotion = useUiSettingsStore((s) => s.setMotion);
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
   const [error, setError] = useState<string>("");
@@ -70,7 +74,14 @@ export function SettingsPage(): JSX.Element {
               <option value="en">English</option>
             </select>
           </label>
-          <p>모션 강도: normal (추후 low/high 제공)</p>
+          <label>
+            모션 강도
+            <select value={motion} onChange={(e) => setMotion(e.target.value as "low" | "normal" | "high")}>
+              <option value="low">low</option>
+              <option value="normal">normal</option>
+              <option value="high">high</option>
+            </select>
+          </label>
           <p>레이아웃 프로필: kr_t_left_v2</p>
         </article>
 

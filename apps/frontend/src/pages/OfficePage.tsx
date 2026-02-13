@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
+import { useSearchParams } from "react-router-dom";
 
 type Point = { x: number; y: number };
 type PositionMap = Record<string, Point>;
@@ -83,12 +84,14 @@ function targetByStatus(agent: AgentView, workers: AgentView[], roamTick: number
 }
 
 export function OfficePage(): JSX.Element {
+  const [searchParams] = useSearchParams();
   const agentsMap = useAgentStore((s) => s.agents);
   const setManyAgents = useAgentStore((s) => s.setMany);
   const [error, setError] = useState<string>("");
   const [roamTick, setRoamTick] = useState(0);
   const [positions, setPositions] = useState<PositionMap>({});
   const lastTsRef = useRef<number>(performance.now());
+  const focusedAgentId = searchParams.get("agent_id") ?? "";
 
   useEffect(() => {
     let mounted = true;
@@ -181,8 +184,13 @@ export function OfficePage(): JSX.Element {
           const pos = positions[agent.agent_id] ?? targets[agent.agent_id] ?? { x: 12, y: 90 };
           const mode = statusClass(agent.status);
           const name = agent.agent_id.split("/").at(-1) ?? agent.agent_id;
+          const isFocused = focusedAgentId === agent.agent_id;
           return (
-            <div key={agent.agent_id} className={`office-agent ${mode}`} style={{ left: `${pos.x}%`, top: `${pos.y}%` }}>
+            <div
+              key={agent.agent_id}
+              className={`office-agent ${mode}${isFocused ? " focused" : ""}`}
+              style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+            >
               <span className="agent-body" />
               {mode === "working" ? (
                 <span className="paper">
