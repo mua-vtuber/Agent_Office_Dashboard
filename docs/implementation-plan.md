@@ -106,7 +106,7 @@ agent-office-dashboard/
 - 백엔드
   - [x] ingest API
   - [x] snapshot API
-  - [ ] sessions API(workspace/session/run)
+  - [x] sessions API(workspace/session/run)
   - [x] agents API(`/api/agents`, `/api/agents/:agent_id`)
   - [x] integration status API (`/api/integration/status`)
   - [x] hooks install API (`/api/integration/hooks/install`)
@@ -117,7 +117,7 @@ agent-office-dashboard/
   - [x] dashboard 위젯
   - [x] agents 목록/상세/필터 UI
   - [x] 정직원/계약직 라벨 UI
-  - [ ] 스코프 바(workspace/session/run)
+  - [x] 스코프 바(workspace/session/run)
   - [x] Time Travel 패널(before/after + pivot 하이라이트)
   - [x] hooks 미설정 배너 + 설치/가이드 진입 버튼
   - [x] office renderer

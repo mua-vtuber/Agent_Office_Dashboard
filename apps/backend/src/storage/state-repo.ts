@@ -36,3 +36,28 @@ export function upsertState(input: {
 export function listStates(): unknown[] {
   return db.prepare("SELECT * FROM state_current ORDER BY agent_id ASC").all();
 }
+
+export function listStatesScoped(filter: {
+  workspace_id?: string;
+  terminal_session_id?: string;
+  run_id?: string;
+}): unknown[] {
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (filter.workspace_id) {
+    where.push("workspace_id = ?");
+    args.push(filter.workspace_id);
+  }
+  if (filter.terminal_session_id) {
+    where.push("terminal_session_id = ?");
+    args.push(filter.terminal_session_id);
+  }
+  if (filter.run_id) {
+    where.push("run_id = ?");
+    args.push(filter.run_id);
+  }
+  const sql = `SELECT * FROM state_current ${
+    where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""
+  } ORDER BY agent_id ASC`;
+  return db.prepare(sql).all(...args);
+}

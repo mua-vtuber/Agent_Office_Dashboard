@@ -12,6 +12,26 @@ INSERT OR REPLACE INTO events (
 )
 `);
 
+type EventRow = {
+  id: string;
+  ts: string;
+  type: string;
+  workspace_id: string;
+  terminal_session_id: string;
+  run_id: string;
+  source: string;
+  agent_id: string;
+  task_id: string | null;
+  payload_json: string;
+  raw_json: string;
+};
+
+type ScopeFilter = {
+  workspace_id?: string;
+  terminal_session_id?: string;
+  run_id?: string;
+};
+
 export function insertEvent(event: NormalizedEvent): void {
   insert.run({
     ...event,
@@ -23,6 +43,30 @@ export function insertEvent(event: NormalizedEvent): void {
 
 export function listEvents(limit = 100): unknown[] {
   return db.prepare("SELECT * FROM events ORDER BY ts DESC LIMIT ?").all(limit);
+}
+
+export function listEventsScoped(limit = 200, filter: ScopeFilter = {}): EventRow[] {
+  const where: string[] = [];
+  const args: unknown[] = [];
+
+  if (filter.workspace_id) {
+    where.push("workspace_id = ?");
+    args.push(filter.workspace_id);
+  }
+  if (filter.terminal_session_id) {
+    where.push("terminal_session_id = ?");
+    args.push(filter.terminal_session_id);
+  }
+  if (filter.run_id) {
+    where.push("run_id = ?");
+    args.push(filter.run_id);
+  }
+
+  const sql = `SELECT * FROM events ${
+    where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""
+  } ORDER BY ts DESC LIMIT ?`;
+
+  return db.prepare(sql).all(...args, limit) as EventRow[];
 }
 
 export function listEventsByAgent(agentId: string, limit = 20): unknown[] {
@@ -38,19 +82,26 @@ export function latestHookEventTs(): string | null {
   return row?.ts ?? null;
 }
 
-type EventRow = {
-  id: string;
-  ts: string;
-  type: string;
+export function listScopes(): Array<{
   workspace_id: string;
   terminal_session_id: string;
   run_id: string;
-  source: string;
-  agent_id: string;
-  task_id: string | null;
-  payload_json: string;
-  raw_json: string;
-};
+  last_event_ts: string;
+}> {
+  return db
+    .prepare(
+      `SELECT workspace_id, terminal_session_id, run_id, MAX(ts) as last_event_ts
+       FROM events
+       GROUP BY workspace_id, terminal_session_id, run_id
+       ORDER BY last_event_ts DESC`
+    )
+    .all() as Array<{
+      workspace_id: string;
+      terminal_session_id: string;
+      run_id: string;
+      last_event_ts: string;
+    }>;
+}
 
 export function getEventById(eventId: string): EventRow | null {
   const row = db.prepare("SELECT * FROM events WHERE id = ? LIMIT 1").get(eventId) as EventRow | undefined;

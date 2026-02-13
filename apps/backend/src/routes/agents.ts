@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { listStates } from "../storage/state-repo";
+import { listStatesScoped } from "../storage/state-repo";
 import { listEventsByAgent } from "../storage/events-repo";
 
 type StateRow = {
@@ -16,9 +16,22 @@ function employmentFromAgentId(agentId: string): "employee" | "contractor" {
   return agentId.endsWith("/leader") ? "employee" : "contractor";
 }
 
+function scopeFilter(query: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): {
+  workspace_id?: string;
+  terminal_session_id?: string;
+  run_id?: string;
+} {
+  const filter: { workspace_id?: string; terminal_session_id?: string; run_id?: string } = {};
+  if (query.workspace_id) filter.workspace_id = query.workspace_id;
+  if (query.terminal_session_id) filter.terminal_session_id = query.terminal_session_id;
+  if (query.run_id) filter.run_id = query.run_id;
+  return filter;
+}
+
 export async function registerAgentRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/agents", async () => {
-    const states = listStates() as StateRow[];
+  app.get("/api/agents", async (request) => {
+    const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
+    const states = listStatesScoped(scopeFilter(query)) as StateRow[];
     return {
       agents: states.map((state) => ({
         agent_id: state.agent_id,
@@ -39,7 +52,8 @@ export async function registerAgentRoutes(app: FastifyInstance): Promise<void> {
     const encoded = params.agentId;
     const agentId = decodeURIComponent(encoded);
 
-    const states = listStates() as StateRow[];
+    const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
+    const states = listStatesScoped(scopeFilter(query)) as StateRow[];
     const state = states.find((s) => s.agent_id === agentId);
 
     if (!state) {

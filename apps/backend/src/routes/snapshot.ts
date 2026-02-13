@@ -1,21 +1,62 @@
 import type { FastifyInstance } from "fastify";
-import { computeAgentStatusAtTs, getEventById, listEvents, listEventsAfter, listEventsBefore } from "../storage/events-repo";
-import { listStates } from "../storage/state-repo";
+import {
+  computeAgentStatusAtTs,
+  getEventById,
+  listEventsAfter,
+  listEventsBefore,
+  listEventsScoped,
+  listScopes
+} from "../storage/events-repo";
+import { listStatesScoped } from "../storage/state-repo";
+import { config } from "../config";
+
+function scopeFilter(query: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): {
+  workspace_id?: string;
+  terminal_session_id?: string;
+  run_id?: string;
+} {
+  const filter: { workspace_id?: string; terminal_session_id?: string; run_id?: string } = {};
+  if (query.workspace_id) filter.workspace_id = query.workspace_id;
+  if (query.terminal_session_id) filter.terminal_session_id = query.terminal_session_id;
+  if (query.run_id) filter.run_id = query.run_id;
+  return filter;
+}
 
 export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/api/snapshot", async () => {
+  app.get("/api/snapshot", async (request) => {
+    const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
+    const filter = scopeFilter(query);
+
     return {
-      agents: listStates(),
+      agents: listStatesScoped(filter),
       tasks: [],
       sessions: [],
       settings: {},
-      recent_events: listEvents(100),
+      recent_events: listEventsScoped(100, filter),
       server_ts: new Date().toISOString()
     };
   });
 
-  app.get("/api/events", async () => {
-    return { events: listEvents(200) };
+  app.get("/api/events", async (request) => {
+    const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
+    return { events: listEventsScoped(200, scopeFilter(query)) };
+  });
+
+  app.get("/api/sessions", async () => {
+    const scopes = listScopes();
+    if (scopes.length === 0) {
+      return {
+        scopes: [
+          {
+            workspace_id: config.defaultWorkspace,
+            terminal_session_id: config.defaultTerminalSession,
+            run_id: config.defaultRunId,
+            last_event_ts: new Date().toISOString()
+          }
+        ]
+      };
+    }
+    return { scopes };
   });
 
   app.get("/api/events/:eventId/context", async (request, reply) => {

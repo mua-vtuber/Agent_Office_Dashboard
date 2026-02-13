@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
 import { BACKEND_ORIGIN } from "../lib/constants";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 type SnapshotAgent = {
   agent_id: string;
@@ -38,6 +38,13 @@ type IntegrationStatus = {
   mode: "normal" | "degraded";
 };
 
+type Scope = {
+  workspace_id: string;
+  terminal_session_id: string;
+  run_id: string;
+  last_event_ts: string;
+};
+
 function statusClass(status: string): string {
   if (status === "failed") return "critical";
   if (status === "pending_input") return "warn";
@@ -50,6 +57,7 @@ function eventSummary(e: EventRow): string {
 }
 
 export function DashboardPage(): JSX.Element {
+  const [searchParams, setSearchParams] = useSearchParams();
   const events = useEventStore((s) => s.events) as EventRow[];
   const setAllEvents = useEventStore((s) => s.setAll);
 
@@ -58,22 +66,34 @@ export function DashboardPage(): JSX.Element {
 
   const [error, setError] = useState<string>("");
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
+  const [scopes, setScopes] = useState<Scope[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [context, setContext] = useState<EventContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
+  const selectedWorkspace = searchParams.get("workspace_id") ?? "";
+  const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
+  const selectedRun = searchParams.get("run_id") ?? "";
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
-        const [eventsRes, snapshotRes, integrationRes] = await Promise.all([
-          fetch(`${BACKEND_ORIGIN}/api/events`),
-          fetch(`${BACKEND_ORIGIN}/api/snapshot`),
+        const query = new URLSearchParams();
+        if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
+        if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
+        if (selectedRun) query.set("run_id", selectedRun);
+        const suffix = query.toString() ? `?${query.toString()}` : "";
+
+        const [eventsRes, snapshotRes, sessionsRes, integrationRes] = await Promise.all([
+          fetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
+          fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
+          fetch(`${BACKEND_ORIGIN}/api/sessions`),
           fetch(`${BACKEND_ORIGIN}/api/integration/status`)
         ]);
 
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
         const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[] };
+        const sessionsJson = (await sessionsRes.json()) as { scopes?: Scope[] };
         const integrationJson = (await integrationRes.json()) as IntegrationStatus;
 
         if (!mounted) return;
@@ -92,6 +112,7 @@ export function DashboardPage(): JSX.Element {
             }))
           );
         }
+        if (Array.isArray(sessionsJson.scopes)) setScopes(sessionsJson.scopes);
         setIntegration(integrationJson);
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "failed to load dashboard");
@@ -101,7 +122,7 @@ export function DashboardPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [setAllEvents, setManyAgents]);
+  }, [setAllEvents, setManyAgents, selectedWorkspace, selectedTerminal, selectedRun]);
 
   useEffect(() => {
     if (!selectedEventId) return;
@@ -125,12 +146,80 @@ export function DashboardPage(): JSX.Element {
   }, [selectedEventId]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
+  const workspaceOptions = useMemo(
+    () => Array.from(new Set(scopes.map((s) => s.workspace_id))),
+    [scopes]
+  );
+  const terminalOptions = useMemo(() => {
+    if (!selectedWorkspace) return scopes;
+    return scopes.filter((s) => s.workspace_id === selectedWorkspace);
+  }, [scopes, selectedWorkspace]);
+  const runOptions = useMemo(() => {
+    return scopes.filter(
+      (s) =>
+        (!selectedWorkspace || s.workspace_id === selectedWorkspace) &&
+        (!selectedTerminal || s.terminal_session_id === selectedTerminal)
+    );
+  }, [scopes, selectedWorkspace, selectedTerminal]);
+
+  const updateScope = (next: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): void => {
+    const params = new URLSearchParams(searchParams);
+    if (next.workspace_id !== undefined) {
+      if (next.workspace_id) params.set("workspace_id", next.workspace_id);
+      else params.delete("workspace_id");
+      params.delete("terminal_session_id");
+      params.delete("run_id");
+    }
+    if (next.terminal_session_id !== undefined) {
+      if (next.terminal_session_id) params.set("terminal_session_id", next.terminal_session_id);
+      else params.delete("terminal_session_id");
+      params.delete("run_id");
+    }
+    if (next.run_id !== undefined) {
+      if (next.run_id) params.set("run_id", next.run_id);
+      else params.delete("run_id");
+    }
+    setSearchParams(params);
+  };
 
   return (
     <section>
       <h2>Dashboard</h2>
       <p>상태 카드 + 타임라인 + Time Travel(전후 문맥) 패널.</p>
       {error ? <p className="error">{error}</p> : null}
+      <div className="scope-bar">
+        <label>
+          Workspace
+          <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
+            <option value="">All</option>
+            {workspaceOptions.map((w) => (
+              <option key={w} value={w}>{w}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Terminal
+          <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
+            <option value="">All</option>
+            {terminalOptions.map((s) => (
+              <option key={`${s.workspace_id}:${s.terminal_session_id}`} value={s.terminal_session_id}>
+                {s.terminal_session_id}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Run
+          <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
+            <option value="">All</option>
+            {runOptions.map((s) => (
+              <option key={`${s.workspace_id}:${s.terminal_session_id}:${s.run_id}`} value={s.run_id}>
+                {s.run_id}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {integration && !integration.hooks_configured ? (
         <div className="hooks-banner">
           Hooks 미설정 상태입니다. 현재 모드: {integration.mode}. 실시간 정확도가 낮을 수 있습니다.
