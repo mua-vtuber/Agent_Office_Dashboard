@@ -51,8 +51,8 @@ type GlobalInstallResult = {
   message?: string;
   target_file?: string;
   backup?: string | null;
-  added: string[];
-  skipped: string[];
+  added?: string[];
+  skipped?: string[];
 };
 
 export function SettingsPage(): JSX.Element {
@@ -179,10 +179,19 @@ export function SettingsPage(): JSX.Element {
     try {
       const res = await fetch(`${BACKEND_ORIGIN}/api/integration/hooks/install-global`, {
         method: "POST",
-        headers: { "content-type": "application/json" }
+        headers: { "content-type": "application/json" },
+        body: "{}"
       });
-      const json = (await res.json()) as GlobalInstallResult;
-      setGlobalResult(json);
+      const raw = (await res.json()) as GlobalInstallResult;
+      const normalized: GlobalInstallResult = {
+        ok: Boolean(raw?.ok),
+        backup: raw?.backup ?? null,
+        added: Array.isArray(raw?.added) ? raw.added : [],
+        skipped: Array.isArray(raw?.skipped) ? raw.skipped : []
+      };
+      if (typeof raw?.message === "string") normalized.message = raw.message;
+      if (typeof raw?.target_file === "string") normalized.target_file = raw.target_file;
+      setGlobalResult(normalized);
       await refreshStatus();
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to install global hooks");
@@ -329,8 +338,8 @@ export function SettingsPage(): JSX.Element {
               <p>{t("settings_result_ok")}: {String(globalResult.ok)}</p>
               {globalResult.message ? <p>{globalResult.message}</p> : null}
               {globalResult.target_file ? <p>{t("settings_result_target")}: {globalResult.target_file}</p> : null}
-              {globalResult.added.length > 0 ? <p>{t("settings_global_added")}: {globalResult.added.join(", ")}</p> : null}
-              {globalResult.skipped.length > 0 ? <p>{t("settings_global_skipped")}: {globalResult.skipped.join(", ")}</p> : null}
+              {Array.isArray(globalResult.added) && globalResult.added.length > 0 ? <p>{t("settings_global_added")}: {globalResult.added.join(", ")}</p> : null}
+              {Array.isArray(globalResult.skipped) && globalResult.skipped.length > 0 ? <p>{t("settings_global_skipped")}: {globalResult.skipped.join(", ")}</p> : null}
               {globalResult.backup ? <p>{t("settings_global_backup")}: {globalResult.backup}</p> : null}
             </div>
           ) : null}

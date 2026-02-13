@@ -62,7 +62,11 @@ function readJsonFile(filePath: string): Record<string, unknown> {
   if (!fs.existsSync(filePath)) return {};
   const text = fs.readFileSync(filePath, "utf8").trim();
   if (!text) return {};
-  return JSON.parse(text) as Record<string, unknown>;
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }
 
 function readTemplateSettings(): { settings?: SettingsFile; template?: string; error?: string } {
@@ -70,8 +74,14 @@ function readTemplateSettings(): { settings?: SettingsFile; template?: string; e
   if (!fs.existsSync(tplPath)) {
     return { error: `template not found: ${tplPath}` };
   }
-  const raw = fs.readFileSync(tplPath, "utf8");
-  const settings = JSON.parse(raw) as SettingsFile;
+  let settings: SettingsFile;
+  let raw: string;
+  try {
+    raw = fs.readFileSync(tplPath, "utf8");
+    settings = JSON.parse(raw) as SettingsFile;
+  } catch (e) {
+    return { error: e instanceof Error ? `invalid template json: ${e.message}` : "invalid template json" };
+  }
   if (!settings.hooks || typeof settings.hooks !== "object") {
     return { error: "template has no hooks section" };
   }
@@ -146,51 +156,59 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
   });
 
   app.post("/api/integration/hooks/install", async (request) => {
-    const body = (request.body ?? {}) as { mode?: "guide" | "write"; workspace_root?: string };
-    const mode = body.mode ?? "guide";
-    const root = body.workspace_root ?? workspaceRoot();
-    const targetFile = path.join(root, ".claude", "settings.local.json");
-    const templateResult = readTemplateSettings();
+    try {
+      const body = (request.body ?? {}) as { mode?: "guide" | "write"; workspace_root?: string };
+      const mode = body.mode ?? "guide";
+      const root = body.workspace_root ?? workspaceRoot();
+      const targetFile = path.join(root, ".claude", "settings.local.json");
+      const templateResult = readTemplateSettings();
 
-    if (templateResult.error || !templateResult.settings?.hooks || !templateResult.template) {
-      return {
-        ok: false,
-        mode,
-        message: templateResult.error ?? "failed to load hooks template",
-        target_file: targetFile
-      };
-    }
+      if (templateResult.error || !templateResult.settings?.hooks || !templateResult.template) {
+        return {
+          ok: false,
+          mode,
+          message: templateResult.error ?? "failed to load hooks template",
+          target_file: targetFile
+        };
+      }
 
-    if (mode === "guide") {
+      if (mode === "guide") {
+        return {
+          ok: true,
+          mode: "guide",
+          target_file: targetFile,
+          template: templateResult.template,
+          next_step: "Paste this template into .claude/settings.local.json then restart Claude Code session."
+        };
+      }
+
+      const merged = mergeHooksIntoFile(targetFile, templateResult.settings.hooks);
+      if (merged.error) {
+        return {
+          ok: false,
+          mode: "write",
+          message: merged.error,
+          target_file: targetFile
+        };
+      }
+
+      const changed = merged.added.length > 0;
       return {
         ok: true,
-        mode: "guide",
+        mode: "write",
+        message: changed
+          ? `hooks merged for: ${merged.added.join(", ")}`
+          : "hooks already configured",
         target_file: targetFile,
-        template: templateResult.template,
-        next_step: "Paste this template into .claude/settings.local.json then restart Claude Code session."
+        next_step: changed ? "Restart Claude Code session to activate hooks." : undefined
       };
-    }
-
-    const merged = mergeHooksIntoFile(targetFile, templateResult.settings.hooks);
-    if (merged.error) {
+    } catch (e) {
       return {
         ok: false,
         mode: "write",
-        message: merged.error,
-        target_file: targetFile
+        message: e instanceof Error ? e.message : "failed to install hooks"
       };
     }
-
-    const changed = merged.added.length > 0;
-    return {
-      ok: true,
-      mode: "write",
-      message: changed
-        ? `hooks merged for: ${merged.added.join(", ")}`
-        : "hooks already configured",
-      target_file: targetFile,
-      next_step: changed ? "Restart Claude Code session to activate hooks." : undefined
-    };
   });
 
   /* ── Global hooks install (merge into ~/.claude/settings.json) ── */
