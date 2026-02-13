@@ -9,7 +9,13 @@ fi
 
 collector_url="${AOD_COLLECTOR_URL:-http://127.0.0.1:4800/ingest/hooks}"
 workspace_id="${AOD_WORKSPACE_ID:-$(basename "${PWD:-unknown-workspace}")}"
-terminal_session_id="${AOD_TERMINAL_SESSION_ID:-${CLAUDE_SESSION_ID:-${TERM_SESSION_ID:-}}}"
+tty_raw="$(tty 2>/dev/null || true)"
+tty_id=""
+if [ -n "${tty_raw}" ] && [ "${tty_raw}" != "not a tty" ]; then
+  tty_id="tty_${tty_raw#/dev/}"
+  tty_id="${tty_id//\//_}"
+fi
+terminal_session_id="${AOD_TERMINAL_SESSION_ID:-${TERM_SESSION_ID:-${tty_id:-${CLAUDE_SESSION_ID:-}}}}"
 run_id="${AOD_RUN_ID:-}"
 terminal_label="${AOD_TERMINAL_LABEL:-${WT_PROFILE_ID:-${TERM_PROGRAM:-terminal}}}"
 collected_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -45,8 +51,14 @@ obj["_meta"] = meta
 
 if workspace_id and "workspace_id" not in obj:
     obj["workspace_id"] = workspace_id
-if terminal_session_id and "terminal_session_id" not in obj:
-    obj["terminal_session_id"] = terminal_session_id
+effective_terminal = terminal_session_id
+if not effective_terminal:
+    # For subagent events, parent_session_id is usually a better terminal-level fallback than session_id.
+    parent = obj.get("parent_session_id")
+    if isinstance(parent, str) and parent:
+        effective_terminal = parent
+if effective_terminal and "terminal_session_id" not in obj:
+    obj["terminal_session_id"] = effective_terminal
 if run_id and "run_id" not in obj:
     obj["run_id"] = run_id
 

@@ -89,7 +89,7 @@ Claude Code hook 이벤트를 전송하는 최소 설정이다.
 
 - `AOD_COLLECTOR_URL` (기본: `http://127.0.0.1:4800/ingest/hooks`)
 - `AOD_WORKSPACE_ID` (기본: 현재 폴더명)
-- `AOD_TERMINAL_SESSION_ID` (기본: `CLAUDE_SESSION_ID` 또는 `TERM_SESSION_ID`)
+- `AOD_TERMINAL_SESSION_ID` (기본: `TERM_SESSION_ID` → 현재 `tty` → `CLAUDE_SESSION_ID`)
 - `AOD_TERMINAL_LABEL` (예: `backend-wsl`, `hotfix-term`)
 - `AOD_RUN_ID` (예: `run-2026-02-13-01`)
 - `DASHBOARD_TOKEN` (인증 헤더 필요 시)
@@ -111,3 +111,4 @@ export AOD_RUN_ID="run-$(date +%Y%m%d-%H%M%S)"
 ## 5) 주의
 - Hook은 실패해도 Claude 작업을 막지 않도록 항상 `exit 0` 처리된다.
 - 같은 프로젝트에서 기존 `.claude/settings.local.json`을 이미 쓰고 있으면 수동 병합해야 한다.
+- 같은 터미널에서 서브에이전트가 여러 개 떠도 기본값은 `tty` 기반으로 같은 `terminal_session_id`로 묶인다.
