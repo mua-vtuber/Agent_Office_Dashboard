@@ -46,6 +46,15 @@ const THOUGHT_BUBBLE_DEFAULTS: ThoughtBubbleForm = {
   },
 };
 
+type GlobalInstallResult = {
+  ok: boolean;
+  message?: string;
+  target_file?: string;
+  backup?: string | null;
+  added: string[];
+  skipped: string[];
+};
+
 export function SettingsPage(): JSX.Element {
   const { t, i18n } = useTranslation();
   const language = useUiSettingsStore((s) => s.language);
@@ -53,6 +62,8 @@ export function SettingsPage(): JSX.Element {
   const setAllUi = useUiSettingsStore((s) => s.setAll);
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
+  const [globalResult, setGlobalResult] = useState<GlobalInstallResult | null>(null);
+  const [globalInstalling, setGlobalInstalling] = useState(false);
   const [draftLanguage, setDraftLanguage] = useState<"ko" | "en">(language);
   const [draftMotion, setDraftMotion] = useState<"low" | "normal" | "high">(motion);
   const [draftLayoutProfile, setDraftLayoutProfile] = useState<string>("kr_t_left_v2");
@@ -158,6 +169,25 @@ export function SettingsPage(): JSX.Element {
       setError(e instanceof Error ? e.message : "failed to save settings");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const installGlobalHooks = async (): Promise<void> => {
+    setGlobalInstalling(true);
+    setGlobalResult(null);
+    setError("");
+    try {
+      const res = await fetch(`${BACKEND_ORIGIN}/api/integration/hooks/install-global`, {
+        method: "POST",
+        headers: { "content-type": "application/json" }
+      });
+      const json = (await res.json()) as GlobalInstallResult;
+      setGlobalResult(json);
+      await refreshStatus();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed to install global hooks");
+    } finally {
+      setGlobalInstalling(false);
     }
   };
 
@@ -283,6 +313,25 @@ export function SettingsPage(): JSX.Element {
               {installResult.target_file ? <p>{t("settings_result_target")}: {installResult.target_file}</p> : null}
               {installResult.next_step ? <p>{t("settings_result_next")}: {installResult.next_step}</p> : null}
               {installResult.template ? <pre>{installResult.template}</pre> : null}
+            </div>
+          ) : null}
+
+          <hr style={{ margin: "16px 0", border: "none", borderTop: "1px solid var(--line)" }} />
+          <h3>{t("settings_global_hooks_title")}</h3>
+          <p className="settings-hint" style={{ marginTop: 0 }}>{t("settings_global_hooks_desc")}</p>
+          <div className="action-row">
+            <button className="list-btn" onClick={() => void installGlobalHooks()} disabled={globalInstalling}>
+              {globalInstalling ? t("common_loading") : t("settings_btn_install_global")}
+            </button>
+          </div>
+          {globalResult ? (
+            <div className="panel nested" style={{ marginTop: "10px" }}>
+              <p>{t("settings_result_ok")}: {String(globalResult.ok)}</p>
+              {globalResult.message ? <p>{globalResult.message}</p> : null}
+              {globalResult.target_file ? <p>{t("settings_result_target")}: {globalResult.target_file}</p> : null}
+              {globalResult.added.length > 0 ? <p>{t("settings_global_added")}: {globalResult.added.join(", ")}</p> : null}
+              {globalResult.skipped.length > 0 ? <p>{t("settings_global_skipped")}: {globalResult.skipped.join(", ")}</p> : null}
+              {globalResult.backup ? <p>{t("settings_global_backup")}: {globalResult.backup}</p> : null}
             </div>
           ) : null}
         </article>

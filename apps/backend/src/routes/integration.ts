@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { latestHookEventTs } from "../storage/events-repo";
 import { config } from "../config";
 
@@ -44,24 +45,98 @@ function checkStatus(root: string): IntegrationStatus {
   };
 }
 
-function hookTemplate(): string {
-  const origin = `http://127.0.0.1:${config.port}`;
-  const curlCmd = () =>
-    `curl -s -m 2 -X POST ${origin}/ingest/hooks -H 'Content-Type: application/json' -H 'Authorization: Bearer $DASHBOARD_TOKEN' -d \\"$(cat)\\" || true`;
-  return JSON.stringify(
-    {
-      hooks: {
-        PreToolUse: [{ command: curlCmd() }],
-        PostToolUse: [{ command: curlCmd() }],
-        SubagentStart: [{ command: curlCmd() }],
-        SubagentStop: [{ command: curlCmd() }],
-        Stop: [{ command: curlCmd() }],
-        Notification: [{ command: curlCmd() }],
-      },
-    },
-    null,
-    2,
-  );
+type HookEntry = { matcher?: string; command?: string; hooks?: Array<{ type?: string; command?: string }> };
+type HooksMap = Record<string, HookEntry[]>;
+type SettingsFile = Record<string, unknown> & { hooks?: HooksMap };
+type MergeResult = { added: string[]; skipped: string[]; backup?: string; error?: string };
+
+function globalSettingsPath(): string {
+  return path.join(os.homedir(), ".claude", "settings.json");
+}
+
+function templatePath(): string {
+  return path.resolve(workspaceRoot(), "docs", "global-hooks-template.json");
+}
+
+function readJsonFile(filePath: string): Record<string, unknown> {
+  if (!fs.existsSync(filePath)) return {};
+  const text = fs.readFileSync(filePath, "utf8").trim();
+  if (!text) return {};
+  return JSON.parse(text) as Record<string, unknown>;
+}
+
+function readTemplateSettings(): { settings?: SettingsFile; template?: string; error?: string } {
+  const tplPath = templatePath();
+  if (!fs.existsSync(tplPath)) {
+    return { error: `template not found: ${tplPath}` };
+  }
+  const raw = fs.readFileSync(tplPath, "utf8");
+  const settings = JSON.parse(raw) as SettingsFile;
+  if (!settings.hooks || typeof settings.hooks !== "object") {
+    return { error: "template has no hooks section" };
+  }
+  return { settings, template: JSON.stringify(settings, null, 2) };
+}
+
+function extractCommands(entries: HookEntry[]): Set<string> {
+  const cmds = new Set<string>();
+  for (const entry of entries) {
+    if (typeof entry.command === "string" && entry.command) {
+      cmds.add(entry.command);
+    }
+    if (Array.isArray(entry.hooks)) {
+      for (const h of entry.hooks) {
+        if (typeof h.command === "string" && h.command) cmds.add(h.command);
+      }
+    }
+  }
+  return cmds;
+}
+
+function mergeHooksIntoFile(targetPath: string, templateHooks: HooksMap): MergeResult {
+  const targetSettings = readJsonFile(targetPath) as SettingsFile;
+  const targetHooks = targetSettings.hooks && typeof targetSettings.hooks === "object" ? targetSettings.hooks : {};
+
+  const added = new Set<string>();
+  const skipped = new Set<string>();
+
+  for (const [eventType, templateEntries] of Object.entries(templateHooks)) {
+    if (!Array.isArray(templateEntries) || templateEntries.length === 0) continue;
+    const existingEntries = Array.isArray(targetHooks[eventType]) ? targetHooks[eventType] : [];
+    const existingCmds = extractCommands(existingEntries);
+
+    for (const templateEntry of templateEntries) {
+      const templateCmds = extractCommands([templateEntry]);
+      const duplicated = Array.from(templateCmds).some((cmd) => existingCmds.has(cmd));
+      if (duplicated) {
+        skipped.add(eventType);
+        continue;
+      }
+      existingEntries.push(templateEntry);
+      for (const cmd of templateCmds) existingCmds.add(cmd);
+      added.add(eventType);
+    }
+
+    targetHooks[eventType] = existingEntries;
+  }
+
+  if (added.size === 0) {
+    return { added: [], skipped: Array.from(skipped) };
+  }
+
+  let backup: string | undefined;
+  if (fs.existsSync(targetPath)) {
+    backup = `${targetPath}.backup.${Date.now()}`;
+    fs.copyFileSync(targetPath, backup);
+  }
+
+  targetSettings.hooks = targetHooks;
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, JSON.stringify(targetSettings, null, 2) + "\n", "utf8");
+
+  const result: MergeResult = { added: Array.from(added), skipped: Array.from(skipped) };
+  if (backup) result.backup = backup;
+  return result;
 }
 
 export async function registerIntegrationRoutes(app: FastifyInstance): Promise<void> {
@@ -75,44 +150,79 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
     const mode = body.mode ?? "guide";
     const root = body.workspace_root ?? workspaceRoot();
     const targetFile = path.join(root, ".claude", "settings.local.json");
+    const templateResult = readTemplateSettings();
+
+    if (templateResult.error || !templateResult.settings?.hooks || !templateResult.template) {
+      return {
+        ok: false,
+        mode,
+        message: templateResult.error ?? "failed to load hooks template",
+        target_file: targetFile
+      };
+    }
 
     if (mode === "guide") {
       return {
         ok: true,
         mode: "guide",
         target_file: targetFile,
-        template: hookTemplate(),
+        template: templateResult.template,
         next_step: "Paste this template into .claude/settings.local.json then restart Claude Code session."
       };
     }
 
-    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
-    if (fs.existsSync(targetFile)) {
-      const existing = fs.readFileSync(targetFile, "utf8");
-      if (!existing.includes("/ingest/hooks")) {
-        return {
-          ok: false,
-          mode: "write",
-          message: "target file already exists and was not modified",
-          target_file: targetFile,
-          template: hookTemplate
-        };
-      }
+    const merged = mergeHooksIntoFile(targetFile, templateResult.settings.hooks);
+    if (merged.error) {
       return {
-        ok: true,
+        ok: false,
         mode: "write",
-        message: "hooks already configured",
+        message: merged.error,
         target_file: targetFile
       };
     }
 
-    fs.writeFileSync(targetFile, hookTemplate(), "utf8");
+    const changed = merged.added.length > 0;
     return {
       ok: true,
       mode: "write",
-      message: "hooks template installed",
+      message: changed
+        ? `hooks merged for: ${merged.added.join(", ")}`
+        : "hooks already configured",
       target_file: targetFile,
-      next_step: "Restart Claude Code session to activate hooks."
+      next_step: changed ? "Restart Claude Code session to activate hooks." : undefined
     };
+  });
+
+  /* ── Global hooks install (merge into ~/.claude/settings.json) ── */
+  app.post("/api/integration/hooks/install-global", async () => {
+    try {
+      const templateResult = readTemplateSettings();
+      if (templateResult.error || !templateResult.settings?.hooks) {
+        return { ok: false, message: templateResult.error ?? "failed to load hooks template", added: [], skipped: [] };
+      }
+      const result = mergeHooksIntoFile(globalSettingsPath(), templateResult.settings.hooks);
+      if (result.error) {
+        return { ok: false, message: result.error, added: [], skipped: [] };
+      }
+
+      return {
+        ok: true,
+        target_file: globalSettingsPath(),
+        backup: result.backup ?? null,
+        added: result.added,
+        skipped: result.skipped,
+        message:
+          result.added.length > 0
+            ? `Added hooks for: ${result.added.join(", ")}. Restart Claude Code to activate.`
+            : "All hooks already configured. Nothing changed."
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : "unknown error",
+        added: [],
+        skipped: []
+      };
+    }
   });
 }
