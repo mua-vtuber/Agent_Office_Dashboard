@@ -118,7 +118,7 @@ agent-office-dashboard/
   - [x] agents 목록/상세/필터 UI
   - [x] 정직원/계약직 라벨 UI
   - [ ] 스코프 바(workspace/session/run)
-  - [ ] Time Travel 패널(before/after + pivot 하이라이트)
+  - [x] Time Travel 패널(before/after + pivot 하이라이트)
   - [ ] hooks 미설정 배너 + 설치/가이드 진입 버튼
   - [x] office renderer
   - [x] `kr_t_left_v2` 레이아웃 프리셋 적용

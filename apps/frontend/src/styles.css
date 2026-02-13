@@ -305,6 +305,10 @@ body {
 }
 
 .list { padding-left: 18px; }
+.timeline-list {
+  max-height: 54vh;
+  overflow: auto;
+}
 
 .filter-row {
   margin-bottom: 12px;
@@ -335,8 +339,39 @@ body {
   background: #eff6ff;
 }
 
+.context-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.context-col {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fff;
+  min-height: 240px;
+}
+
+.compact-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pivot-line {
+  border-left: 3px solid var(--accent);
+  padding-left: 8px;
+  font-weight: 600;
+}
+
 @media (max-width: 900px) {
   .split-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .context-grid {
     grid-template-columns: 1fr;
   }
 

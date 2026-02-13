@@ -1,5 +1,6 @@
 import { db } from "./db";
 import type { NormalizedEvent } from "@aod/shared-schema";
+import { nextStatus } from "../services/state-machine";
 
 const insert = db.prepare(`
 INSERT OR REPLACE INTO events (
@@ -28,4 +29,74 @@ export function listEventsByAgent(agentId: string, limit = 20): unknown[] {
   return db
     .prepare("SELECT * FROM events WHERE agent_id = ? ORDER BY ts DESC LIMIT ?")
     .all(agentId, limit);
+}
+
+type EventRow = {
+  id: string;
+  ts: string;
+  type: string;
+  workspace_id: string;
+  terminal_session_id: string;
+  run_id: string;
+  source: string;
+  agent_id: string;
+  task_id: string | null;
+  payload_json: string;
+  raw_json: string;
+};
+
+export function getEventById(eventId: string): EventRow | null {
+  const row = db.prepare("SELECT * FROM events WHERE id = ? LIMIT 1").get(eventId) as EventRow | undefined;
+  return row ?? null;
+}
+
+export function listEventsBefore(ts: string, limit = 10): EventRow[] {
+  return db
+    .prepare("SELECT * FROM events WHERE ts < ? ORDER BY ts DESC LIMIT ?")
+    .all(ts, limit) as EventRow[];
+}
+
+export function listEventsAfter(ts: string, limit = 10): EventRow[] {
+  return db
+    .prepare("SELECT * FROM events WHERE ts > ? ORDER BY ts ASC LIMIT ?")
+    .all(ts, limit) as EventRow[];
+}
+
+export function computeAgentStatusAtTs(agentId: string, ts: string): {
+  agent_id: string;
+  status: string;
+  event_count_until_pivot: number;
+  last_event_ts: string | null;
+} {
+  const rows = db
+    .prepare("SELECT * FROM events WHERE agent_id = ? AND ts <= ? ORDER BY ts ASC")
+    .all(agentId, ts) as EventRow[];
+
+  let status: string | undefined;
+  for (const row of rows) {
+    status = nextStatus(status, {
+      id: row.id,
+      version: "1.1",
+      ts: row.ts,
+      type: row.type as NormalizedEvent["type"],
+      workspace_id: row.workspace_id,
+      terminal_session_id: row.terminal_session_id,
+      run_id: row.run_id,
+      session_id: undefined,
+      source: row.source as NormalizedEvent["source"],
+      agent_id: row.agent_id,
+      task_id: row.task_id ?? undefined,
+      severity: "info",
+      locale: undefined,
+      payload: row.payload_json ? JSON.parse(row.payload_json) : {},
+      raw: row.raw_json ? JSON.parse(row.raw_json) : {}
+    });
+  }
+
+  return {
+    agent_id: agentId,
+    status: status ?? "idle",
+    event_count_until_pivot: rows.length,
+    last_event_ts: rows.at(-1)?.ts ?? null
+  };
 }
