@@ -47,7 +47,7 @@ const THOUGHT_BUBBLE_DEFAULTS: ThoughtBubbleForm = {
 };
 
 export function SettingsPage(): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
   const setAllUi = useUiSettingsStore((s) => s.setAll);
@@ -114,6 +114,7 @@ export function SettingsPage(): JSX.Element {
         const serverMotion = json.settings?.ui_motion ?? motion;
         const serverLayout = json.settings?.layout_profile ?? "kr_t_left_v2";
         setAllUi({ language: serverLanguage, motion: serverMotion });
+        void i18n.changeLanguage(serverLanguage);
         setDraftLanguage(serverLanguage);
         setDraftMotion(serverMotion);
         setDraftLayoutProfile(serverLayout);
@@ -128,7 +129,7 @@ export function SettingsPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [language, loaded, motion, setAllUi]);
+  }, [i18n, language, loaded, motion, setAllUi]);
 
   const saveSettings = async (): Promise<void> => {
     setSaving(true);
@@ -151,6 +152,7 @@ export function SettingsPage(): JSX.Element {
         throw new Error("failed to save settings");
       }
       setAllUi({ language: draftLanguage, motion: draftMotion });
+      void i18n.changeLanguage(draftLanguage);
       setSaveMessage(t("settings_saved"));
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to save settings");
