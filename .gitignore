@@ -1,0 +1,10 @@
+node_modules
+.pnpm-store
+.DS_Store
+*.log
+.omc
+apps/backend/data/*.db
+apps/backend/data/*.db-*
+dist
+build
+coverage

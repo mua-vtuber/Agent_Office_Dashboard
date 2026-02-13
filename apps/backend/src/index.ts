@@ -1,0 +1,40 @@
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import { config } from "./config";
+import { registerIngestRoutes } from "./routes/ingest";
+import { registerSnapshotRoutes } from "./routes/snapshot";
+import { registerAgentRoutes } from "./routes/agents";
+import { wss } from "./ws/gateway";
+
+async function start(): Promise<void> {
+  const app = Fastify({ logger: true });
+
+  await app.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "OPTIONS"]
+  });
+
+  await registerIngestRoutes(app);
+  await registerSnapshotRoutes(app);
+  await registerAgentRoutes(app);
+
+  app.get("/api/health", async () => ({ ok: true }));
+
+  app.server.on("upgrade", (request, socket, head) => {
+    if (request.url !== "/ws") {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit("connection", ws, request);
+    });
+  });
+
+  await app.listen({ port: config.port, host: config.host });
+  app.log.info(`backend listening on http://${config.host}:${config.port}`);
+}
+
+start().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
