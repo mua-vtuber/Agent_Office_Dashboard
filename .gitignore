@@ -5,6 +5,8 @@ node_modules
 .omc
 apps/backend/data/*.db
 apps/backend/data/*.db-*
+apps/backend/apps/backend/data/*.db
+apps/backend/apps/backend/data/*.db-*
 dist
 build
 coverage
