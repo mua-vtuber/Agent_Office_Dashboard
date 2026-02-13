@@ -29,6 +29,7 @@
 - `session-routing.md`: 다중 터미널 추적/대시보드 라우팅
 - `hooks-onboarding.md`: Hooks 설정 안내/점검/설치 플로우
 - `hooks-quickstart.md`: 다른 프로젝트에 Hook 연결하는 빠른 설정 가이드
+- `global-setup-checklist.md`: 전역 Hooks/Skills 설정 및 검증 체크리스트
 - `time-travel-spec.md`: 실패 이벤트 문맥 재구성(Time Travel) 스펙
 - `performance-targets.md`: 성능 목표/측정 기준/SLO
 - `operations-first-ux-checklist.md`: 운영 우선 UX 점검표(정보/생산성/신뢰성)
