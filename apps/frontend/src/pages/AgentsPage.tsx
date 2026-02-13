@@ -27,20 +27,12 @@ type AgentDetail = {
   recent_events: unknown[];
 };
 
-type Scope = {
-  workspace_id: string;
-  terminal_session_id: string;
-  run_id: string;
-  last_event_ts: string;
-};
-
 export function AgentsPage(): JSX.Element {
   const { t } = useTranslation();
   const badge = (type: EmploymentType): string => (type === "employee" ? t("agents_employee") : t("agents_contractor"));
   const [searchParams, setSearchParams] = useSearchParams();
   const agentsMap = useAgentStore((s) => s.agents);
   const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [scopes, setScopes] = useState<Scope[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [employmentFilter, setEmploymentFilter] = useState<"all" | EmploymentType>("all");
@@ -60,12 +52,8 @@ export function AgentsPage(): JSX.Element {
         if (selectedRun) query.set("run_id", selectedRun);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
-        const [agentsRes, sessionsRes] = await Promise.all([
-          authFetch(`${BACKEND_ORIGIN}/api/agents${suffix}`),
-          authFetch(`${BACKEND_ORIGIN}/api/sessions`)
-        ]);
+        const agentsRes = await authFetch(`${BACKEND_ORIGIN}/api/agents${suffix}`);
         const json = (await agentsRes.json()) as { agents?: AgentRow[] };
-        const sessionsJson = (await sessionsRes.json()) as { scopes?: Scope[] };
         if (mounted && Array.isArray(json.agents)) {
           setAgents(json.agents);
           if (selectedAgentParam) {
@@ -75,9 +63,6 @@ export function AgentsPage(): JSX.Element {
             const first = json.agents[0];
             if (first) setSelectedId(first.agent_id);
           }
-        }
-        if (mounted && Array.isArray(sessionsJson.scopes)) {
-          setScopes(sessionsJson.scopes);
         }
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "failed to load agents");
@@ -133,42 +118,6 @@ export function AgentsPage(): JSX.Element {
     if (!exists) setSelectedId(filteredAgents[0]?.agent_id ?? "");
   }, [filteredAgents, selectedId]);
 
-  const workspaceOptions = useMemo(
-    () => Array.from(new Set(scopes.map((s) => s.workspace_id))),
-    [scopes]
-  );
-  const terminalOptions = useMemo(() => {
-    if (!selectedWorkspace) return scopes;
-    return scopes.filter((s) => s.workspace_id === selectedWorkspace);
-  }, [scopes, selectedWorkspace]);
-  const runOptions = useMemo(() => {
-    return scopes.filter(
-      (s) =>
-        (!selectedWorkspace || s.workspace_id === selectedWorkspace) &&
-        (!selectedTerminal || s.terminal_session_id === selectedTerminal)
-    );
-  }, [scopes, selectedWorkspace, selectedTerminal]);
-
-  const updateScope = (next: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): void => {
-    const params = new URLSearchParams(searchParams);
-    if (next.workspace_id !== undefined) {
-      if (next.workspace_id) params.set("workspace_id", next.workspace_id);
-      else params.delete("workspace_id");
-      params.delete("terminal_session_id");
-      params.delete("run_id");
-    }
-    if (next.terminal_session_id !== undefined) {
-      if (next.terminal_session_id) params.set("terminal_session_id", next.terminal_session_id);
-      else params.delete("terminal_session_id");
-      params.delete("run_id");
-    }
-    if (next.run_id !== undefined) {
-      if (next.run_id) params.set("run_id", next.run_id);
-      else params.delete("run_id");
-    }
-    setSearchParams(params);
-  };
-
   const selectAgent = (agentId: string): void => {
     setSelectedId(agentId);
     const params = new URLSearchParams(searchParams);
@@ -181,39 +130,6 @@ export function AgentsPage(): JSX.Element {
       <h2>{t("agents_title")}</h2>
       <p>{t("agents_subtitle")}</p>
       {error ? <p className="error">{error}</p> : null}
-      <div className="scope-bar">
-        <label>
-          {t("common_workspace")}
-          <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
-            <option value="">{t("common_all")}</option>
-            {workspaceOptions.map((w) => (
-              <option key={w} value={w}>{w}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("common_terminal")}
-          <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
-            <option value="">{t("common_all")}</option>
-            {terminalOptions.map((s) => (
-              <option key={`${s.workspace_id}:${s.terminal_session_id}`} value={s.terminal_session_id}>
-                {s.terminal_session_id}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("common_run")}
-          <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
-            <option value="">{t("common_all")}</option>
-            {runOptions.map((s) => (
-              <option key={`${s.workspace_id}:${s.terminal_session_id}:${s.run_id}`} value={s.run_id}>
-                {s.run_id}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
 
       <div className="filter-row">
         <label>

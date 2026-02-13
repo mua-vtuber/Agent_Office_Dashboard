@@ -17,12 +17,22 @@ body {
 
 .app-shell { min-height: 100vh; }
 .topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  display: grid;
+  gap: 10px;
   padding: 14px 20px;
   border-bottom: 1px solid var(--line);
   background: #fff;
+}
+
+.topbar-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar-main h1 {
+  margin: 0;
 }
 
 .tabs { display: flex; gap: 8px; }
@@ -265,6 +275,15 @@ body {
   color: var(--muted);
 }
 
+.header-scope {
+  margin-bottom: 0;
+  width: min(980px, 100%);
+}
+
+.header-scope select {
+  min-width: 0;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -448,6 +467,15 @@ body {
 }
 
 @media (max-width: 900px) {
+  .topbar-main {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tabs {
+    flex-wrap: wrap;
+  }
+
   .split-layout {
     grid-template-columns: 1fr;
   }

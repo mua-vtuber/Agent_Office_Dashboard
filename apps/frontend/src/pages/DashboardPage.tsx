@@ -51,14 +51,8 @@ type IntegrationStatus = {
   mode: "normal" | "degraded";
 };
 
-type Scope = {
-  workspace_id: string;
-  terminal_session_id: string;
-  run_id: string;
-  last_event_ts: string;
-};
-
 const DEFAULT_SYNC_INTERVAL_SEC = 30;
+
 
 function statusClass(status: string): string {
   if (status === "failed") return "critical";
@@ -82,7 +76,7 @@ function eventSummary(e: EventRow): string {
 
 export function DashboardPage(): JSX.Element {
   const { t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const events = useEventStore((s) => s.events) as EventRow[];
   const setAllEvents = useEventStore((s) => s.setAll);
 
@@ -91,7 +85,6 @@ export function DashboardPage(): JSX.Element {
 
   const [error, setError] = useState<string>("");
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
-  const [scopes, setScopes] = useState<Scope[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [context, setContext] = useState<EventContext | null>(null);
@@ -115,17 +108,15 @@ export function DashboardPage(): JSX.Element {
       try {
         const suffix = buildSuffix();
 
-        const [eventsRes, snapshotRes, sessionsRes, integrationRes, settingsRes] = await Promise.all([
+        const [eventsRes, snapshotRes, integrationRes, settingsRes] = await Promise.all([
           authFetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
           authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          authFetch(`${BACKEND_ORIGIN}/api/sessions`),
           authFetch(`${BACKEND_ORIGIN}/api/integration/status`),
           authFetch(`${BACKEND_ORIGIN}/api/settings/app`),
         ]);
 
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
         const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
-        const sessionsJson = (await sessionsRes.json()) as { scopes?: Scope[] };
         const integrationJson = (await integrationRes.json()) as IntegrationStatus;
 
         if (settingsRes.ok) {
@@ -154,7 +145,6 @@ export function DashboardPage(): JSX.Element {
           );
         }
         if (Array.isArray(snapshotJson.tasks)) setTasks(snapshotJson.tasks);
-        if (Array.isArray(sessionsJson.scopes)) setScopes(sessionsJson.scopes);
         setIntegration(integrationJson);
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "failed to load dashboard");
@@ -220,77 +210,12 @@ export function DashboardPage(): JSX.Element {
   }, [selectedEventId]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
-  const workspaceOptions = useMemo(() => Array.from(new Set(scopes.map((s) => s.workspace_id))), [scopes]);
-  const terminalOptions = useMemo(() => {
-    if (!selectedWorkspace) return scopes;
-    return scopes.filter((s) => s.workspace_id === selectedWorkspace);
-  }, [scopes, selectedWorkspace]);
-  const runOptions = useMemo(() => {
-    return scopes.filter(
-      (s) =>
-        (!selectedWorkspace || s.workspace_id === selectedWorkspace) &&
-        (!selectedTerminal || s.terminal_session_id === selectedTerminal)
-    );
-  }, [scopes, selectedWorkspace, selectedTerminal]);
-
-  const updateScope = (next: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): void => {
-    const params = new URLSearchParams(searchParams);
-    if (next.workspace_id !== undefined) {
-      if (next.workspace_id) params.set("workspace_id", next.workspace_id);
-      else params.delete("workspace_id");
-      params.delete("terminal_session_id");
-      params.delete("run_id");
-    }
-    if (next.terminal_session_id !== undefined) {
-      if (next.terminal_session_id) params.set("terminal_session_id", next.terminal_session_id);
-      else params.delete("terminal_session_id");
-      params.delete("run_id");
-    }
-    if (next.run_id !== undefined) {
-      if (next.run_id) params.set("run_id", next.run_id);
-      else params.delete("run_id");
-    }
-    setSearchParams(params);
-  };
 
   return (
     <section>
       <h2>{t("dashboard_title")}</h2>
       <p>{t("dashboard_subtitle")}</p>
       {error ? <p className="error">{error}</p> : null}
-      <div className="scope-bar">
-        <label>
-          {t("common_workspace")}
-          <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
-            <option value="">{t("common_all")}</option>
-            {workspaceOptions.map((w) => (
-              <option key={w} value={w}>{w}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("common_terminal")}
-          <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
-            <option value="">{t("common_all")}</option>
-            {terminalOptions.map((s) => (
-              <option key={`${s.workspace_id}:${s.terminal_session_id}`} value={s.terminal_session_id}>
-                {s.terminal_session_id}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t("common_run")}
-          <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
-            <option value="">{t("common_all")}</option>
-            {runOptions.map((s) => (
-              <option key={`${s.workspace_id}:${s.terminal_session_id}:${s.run_id}`} value={s.run_id}>
-                {s.run_id}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
       {integration && !integration.hooks_configured ? (
         <div className="hooks-banner">
           {t("dashboard_hooks_missing", { mode: integration.mode })}
