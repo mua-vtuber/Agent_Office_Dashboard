@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
 import { useUiSettingsStore } from "../stores/ui-settings-store";
+import { useTranslation } from "react-i18next";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
@@ -21,6 +22,7 @@ type InstallResult = {
 };
 
 export function SettingsPage(): JSX.Element {
+  const { t } = useTranslation();
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
   const setLanguage = useUiSettingsStore((s) => s.setLanguage);
@@ -61,42 +63,42 @@ export function SettingsPage(): JSX.Element {
 
   return (
     <section>
-      <h2>Settings</h2>
+      <h2>{t("settings_title")}</h2>
 
       <div className="split-layout">
         <article className="panel">
-          <h3>언어 / 모션</h3>
-          <p>i18n 기반 설정(현재 MVP는 저장 없이 즉시 선택 UI만 제공).</p>
+          <h3>{t("settings_lang_motion")}</h3>
+          <p>{t("settings_lang_motion_desc")}</p>
           <label>
-            언어
+            {t("settings_language")}
             <select value={language} onChange={(e) => setLanguage(e.target.value as "ko" | "en")}>
               <option value="ko">한국어</option>
               <option value="en">English</option>
             </select>
           </label>
           <label>
-            모션 강도
+            {t("settings_motion")}
             <select value={motion} onChange={(e) => setMotion(e.target.value as "low" | "normal" | "high")}>
               <option value="low">low</option>
               <option value="normal">normal</option>
               <option value="high">high</option>
             </select>
           </label>
-          <p>레이아웃 프로필: kr_t_left_v2</p>
+          <p>{t("settings_layout_profile")}: kr_t_left_v2</p>
         </article>
 
         <article className="panel">
-          <h3>Hooks Onboarding</h3>
+          <h3>{t("settings_hooks_title")}</h3>
           {error ? <p className="error">{error}</p> : null}
           {!status ? (
-            <p>상태 확인 중...</p>
+            <p>{t("settings_status_checking")}</p>
           ) : (
             <div>
-              <p>mode: {status.mode}</p>
-              <p>hooks configured: {String(status.hooks_configured)}</p>
-              <p>last checked: {status.last_checked_at}</p>
-              <p>last hook event: {status.last_hook_event_at ?? "-"}</p>
-              <p>checked files:</p>
+              <p>{t("settings_mode")}: {status.mode}</p>
+              <p>{t("settings_hooks_configured")}: {String(status.hooks_configured)}</p>
+              <p>{t("settings_last_checked")}: {status.last_checked_at}</p>
+              <p>{t("settings_last_hook_event")}: {status.last_hook_event_at ?? "-"}</p>
+              <p>{t("settings_checked_files")}:</p>
               <ul className="compact-list">
                 {status.checked_files.map((f) => (
                   <li key={f}>{f}</li>
@@ -106,17 +108,17 @@ export function SettingsPage(): JSX.Element {
           )}
 
           <div className="action-row">
-            <button className="list-btn" onClick={() => void installHooks("guide")}>설정 가이드 보기</button>
-            <button className="list-btn" onClick={() => void installHooks("write")}>자동 설정 시도</button>
-            <button className="list-btn" onClick={() => void refreshStatus()}>상태 새로고침</button>
+            <button className="list-btn" onClick={() => void installHooks("guide")}>{t("settings_btn_guide")}</button>
+            <button className="list-btn" onClick={() => void installHooks("write")}>{t("settings_btn_install")}</button>
+            <button className="list-btn" onClick={() => void refreshStatus()}>{t("settings_btn_refresh")}</button>
           </div>
 
           {installResult ? (
             <div className="panel nested">
-              <p>ok: {String(installResult.ok)} / mode: {installResult.mode}</p>
+              <p>{t("settings_result_ok")}: {String(installResult.ok)} / {t("settings_result_mode")}: {installResult.mode}</p>
               {installResult.message ? <p>{installResult.message}</p> : null}
-              {installResult.target_file ? <p>target: {installResult.target_file}</p> : null}
-              {installResult.next_step ? <p>next: {installResult.next_step}</p> : null}
+              {installResult.target_file ? <p>{t("settings_result_target")}: {installResult.target_file}</p> : null}
+              {installResult.next_step ? <p>{t("settings_result_next")}: {installResult.next_step}</p> : null}
               {installResult.template ? <pre>{installResult.template}</pre> : null}
             </div>
           ) : null}

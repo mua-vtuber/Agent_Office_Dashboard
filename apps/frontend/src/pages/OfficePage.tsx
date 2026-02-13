@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
 import { useSearchParams } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 type Point = { x: number; y: number };
 type PositionMap = Record<string, Point>;
 type Bounds = { x1: number; x2: number; y1: number; y2: number };
+type RecentEvent = { id: string; ts: string; type: string; agent_id: string };
 
 const pantryZone: Bounds = { x1: 76, x2: 100, y1: 0, y2: 100 };
 const roamZone: Bounds = { x1: 8, x2: 70, y1: 12, y2: 92 };
@@ -84,12 +86,15 @@ function targetByStatus(agent: AgentView, workers: AgentView[], roamTick: number
 }
 
 export function OfficePage(): JSX.Element {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const agentsMap = useAgentStore((s) => s.agents);
   const setManyAgents = useAgentStore((s) => s.setMany);
   const [error, setError] = useState<string>("");
   const [roamTick, setRoamTick] = useState(0);
   const [positions, setPositions] = useState<PositionMap>({});
+  const [focusedRecentEvents, setFocusedRecentEvents] = useState<RecentEvent[]>([]);
+  const [focusedEventsLoading, setFocusedEventsLoading] = useState(false);
   const lastTsRef = useRef<number>(performance.now());
   const focusedAgentId = searchParams.get("agent_id") ?? "";
   const selectedWorkspace = searchParams.get("workspace_id") ?? "";
@@ -139,6 +144,38 @@ export function OfficePage(): JSX.Element {
   );
 
   useEffect(() => {
+    if (!focusedAgentId) {
+      setFocusedRecentEvents([]);
+      return;
+    }
+    let mounted = true;
+    setFocusedEventsLoading(true);
+    void (async () => {
+      try {
+        const query = new URLSearchParams();
+        if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
+        if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
+        if (selectedRun) query.set("run_id", selectedRun);
+        const suffix = query.toString() ? `?${query.toString()}` : "";
+        const encoded = encodeURIComponent(focusedAgentId);
+        const res = await fetch(`${BACKEND_ORIGIN}/api/agents/${encoded}${suffix}`);
+        const json = (await res.json()) as { agent?: { recent_events?: RecentEvent[] } };
+        if (mounted) {
+          const rows = Array.isArray(json.agent?.recent_events) ? json.agent?.recent_events ?? [] : [];
+          setFocusedRecentEvents(rows.slice(0, 3));
+        }
+      } catch {
+        if (mounted) setFocusedRecentEvents([]);
+      } finally {
+        if (mounted) setFocusedEventsLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [focusedAgentId, selectedWorkspace, selectedTerminal, selectedRun]);
+
+  useEffect(() => {
     let frame = 0;
     const step = (now: number) => {
       const dt = Math.max(0.001, (now - lastTsRef.current) / 1000);
@@ -176,17 +213,17 @@ export function OfficePage(): JSX.Element {
 
   return (
     <section>
-      <h2>Office</h2>
-      <p>좌측 T자(팀장 포함) + 중앙 블록 + 우측 탕비실(`kr_t_left_v2`) 레이아웃입니다.</p>
+      <h2>{t("office_title")}</h2>
+      <p>{t("office_subtitle")}</p>
       {error ? <p className="error">{error}</p> : null}
 
       <div className="office-canvas" role="img" aria-label="agent office layout">
-        <div className="zone entrance">입구</div>
-        <div className="zone t-cluster">좌측 T 구역</div>
-        <div className="zone center-block">중앙 팀원 구역</div>
-        <div className="zone pantry">탕비실</div>
-        <div className="zone pantry-lane">탕비실 문 동선</div>
-        <div className="zone meeting-lane">미팅 레인</div>
+        <div className="zone entrance">{t("office_zone_entrance")}</div>
+        <div className="zone t-cluster">{t("office_zone_t")}</div>
+        <div className="zone center-block">{t("office_zone_center")}</div>
+        <div className="zone pantry">{t("office_zone_pantry")}</div>
+        <div className="zone pantry-lane">{t("office_zone_pantry_lane")}</div>
+        <div className="zone meeting-lane">{t("office_zone_meeting")}</div>
 
         {seatPoints.map((p, idx) => (
           <div key={`seat-${idx}`} className="seat-dot" style={{ left: `${p.x}%`, top: `${p.y}%` }} />
@@ -221,11 +258,21 @@ export function OfficePage(): JSX.Element {
       </div>
       {focusedAgent ? (
         <article className="panel focus-panel">
-          <h3>Focus Agent</h3>
+          <h3>{t("office_focus_title")}</h3>
           <p><strong>{focusedAgent.agent_id}</strong></p>
-          <p>status: {focusedAgent.status}</p>
-          <p>last event: {focusedAgent.last_event_ts}</p>
-          <p>현재 선택된 에이전트는 오피스에서 하이라이트됩니다.</p>
+          <p>{t("office_focus_status")}: {focusedAgent.status}</p>
+          <p>{t("office_focus_last_event")}: {focusedAgent.last_event_ts}</p>
+          <h4>{t("office_focus_recent_events")}</h4>
+          {focusedEventsLoading ? <p>{t("common_loading")}</p> : null}
+          {!focusedEventsLoading && focusedRecentEvents.length === 0 ? <p>{t("office_focus_empty_recent")}</p> : null}
+          {!focusedEventsLoading && focusedRecentEvents.length > 0 ? (
+            <ul className="compact-list">
+              {focusedRecentEvents.map((evt) => (
+                <li key={evt.id}>{evt.ts} | {evt.type}</li>
+              ))}
+            </ul>
+          ) : null}
+          <p>{t("office_focus_hint")}</p>
         </article>
       ) : null}
     </section>

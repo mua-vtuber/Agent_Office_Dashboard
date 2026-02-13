@@ -283,7 +283,7 @@ export function DashboardPage(): JSX.Element {
           {context ? (
             <div className="context-grid">
               <div className="context-col">
-                <h4>Before</h4>
+                <h4>{t("dashboard_before")}</h4>
                 <ul className="compact-list">
                   {context.before.map((e) => (
                     <li key={e.id}>{eventSummary(e)}</li>
@@ -291,7 +291,7 @@ export function DashboardPage(): JSX.Element {
                 </ul>
               </div>
               <div className="context-col">
-                <h4>Pivot</h4>
+                <h4>{t("dashboard_pivot")}</h4>
                 <p className="pivot-line">{eventSummary(context.pivot)}</p>
                 <h4>{t("dashboard_agent_snapshot")}</h4>
                 <p>{context.agent_snapshot.agent_id}</p>
@@ -300,7 +300,7 @@ export function DashboardPage(): JSX.Element {
                 <p>last event ts: {context.agent_snapshot.last_event_ts ?? "-"}</p>
               </div>
               <div className="context-col">
-                <h4>After</h4>
+                <h4>{t("dashboard_after")}</h4>
                 <ul className="compact-list">
                   {context.after.map((e) => (
                     <li key={e.id}>{eventSummary(e)}</li>
