@@ -45,6 +45,7 @@ export function AgentsPage(): JSX.Element {
   const selectedWorkspace = searchParams.get("workspace_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
   const selectedRun = searchParams.get("run_id") ?? "";
+  const selectedAgentParam = searchParams.get("agent_id") ?? "";
 
   useEffect(() => {
     let mounted = true;
@@ -64,8 +65,13 @@ export function AgentsPage(): JSX.Element {
         const sessionsJson = (await sessionsRes.json()) as { scopes?: Scope[] };
         if (mounted && Array.isArray(json.agents)) {
           setAgents(json.agents);
-          const first = json.agents[0];
-          if (first) setSelectedId(first.agent_id);
+          if (selectedAgentParam) {
+            const paramAgent = json.agents.find((a) => a.agent_id === selectedAgentParam);
+            if (paramAgent) setSelectedId(paramAgent.agent_id);
+          } else {
+            const first = json.agents[0];
+            if (first) setSelectedId(first.agent_id);
+          }
         }
         if (mounted && Array.isArray(sessionsJson.scopes)) {
           setScopes(sessionsJson.scopes);
@@ -77,7 +83,7 @@ export function AgentsPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [selectedWorkspace, selectedTerminal, selectedRun]);
+  }, [selectedWorkspace, selectedTerminal, selectedRun, selectedAgentParam]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -106,6 +112,13 @@ export function AgentsPage(): JSX.Element {
     if (employmentFilter === "all") return agents;
     return agents.filter((a) => a.employment_type === employmentFilter);
   }, [agents, employmentFilter]);
+
+  useEffect(() => {
+    if (selectedAgentParam && selectedAgentParam !== selectedId) {
+      const exists = agents.some((a) => a.agent_id === selectedAgentParam);
+      if (exists) setSelectedId(selectedAgentParam);
+    }
+  }, [agents, selectedAgentParam, selectedId]);
 
   useEffect(() => {
     if (filteredAgents.length === 0) {

@@ -296,8 +296,8 @@ export function DashboardPage(): JSX.Element {
                 <h4>{t("dashboard_agent_snapshot")}</h4>
                 <p>{context.agent_snapshot.agent_id}</p>
                 <p>{t("common_status")}: {context.agent_snapshot.status}</p>
-                <p>events until pivot: {context.agent_snapshot.event_count_until_pivot}</p>
-                <p>{t("common_last")} event ts: {context.agent_snapshot.last_event_ts ?? "-"}</p>
+                <p>{t("dashboard_events_until_pivot")}: {context.agent_snapshot.event_count_until_pivot}</p>
+                <p>{t("dashboard_last_event_ts")}: {context.agent_snapshot.last_event_ts ?? "-"}</p>
               </div>
               <div className="context-col">
                 <h4>{t("dashboard_after")}</h4>

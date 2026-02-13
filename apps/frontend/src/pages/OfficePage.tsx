@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
 type Point = { x: number; y: number };
@@ -272,6 +272,20 @@ export function OfficePage(): JSX.Element {
               ))}
             </ul>
           ) : null}
+          <p>
+            <Link
+              to={{
+                pathname: "/agents",
+                search: (() => {
+                  const params = new URLSearchParams(searchParams);
+                  params.set("agent_id", focusedAgent.agent_id);
+                  return params.toString() ? `?${params.toString()}` : "";
+                })()
+              }}
+            >
+              {t("office_focus_open_agents")}
+            </Link>
+          </p>
           <p>{t("office_focus_hint")}</p>
         </article>
       ) : null}
