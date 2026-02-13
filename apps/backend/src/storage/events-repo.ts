@@ -23,3 +23,9 @@ export function insertEvent(event: NormalizedEvent): void {
 export function listEvents(limit = 100): unknown[] {
   return db.prepare("SELECT * FROM events ORDER BY ts DESC LIMIT ?").all(limit);
 }
+
+export function listEventsByAgent(agentId: string, limit = 20): unknown[] {
+  return db
+    .prepare("SELECT * FROM events WHERE agent_id = ? ORDER BY ts DESC LIMIT ?")
+    .all(agentId, limit);
+}

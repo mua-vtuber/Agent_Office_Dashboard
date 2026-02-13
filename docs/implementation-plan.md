@@ -99,30 +99,30 @@ agent-office-dashboard/
 
 ## 4. 체크리스트
 - 공통
-  - [ ] 이벤트 스키마 버전 고정
-  - [ ] mock 이벤트 생성기 작성
+  - [x] 이벤트 스키마 버전 고정
+  - [x] mock 이벤트 생성기 작성
   - [ ] 에러 로깅 규칙 반영
-  - [ ] i18n 메시지 키/번역 파일 구성(ko/en)
+  - [x] i18n 메시지 키/번역 파일 구성(ko/en)
 - 백엔드
-  - [ ] ingest API
-  - [ ] snapshot API
+  - [x] ingest API
+  - [x] snapshot API
   - [ ] sessions API(workspace/session/run)
-  - [ ] agents API(`/api/agents`, `/api/agents/:agent_id`)
+  - [x] agents API(`/api/agents`, `/api/agents/:agent_id`)
   - [ ] integration status API (`/api/integration/status`)
   - [ ] hooks install API (`/api/integration/hooks/install`)
-  - [ ] ws broadcast
-  - [ ] SQLite schema + repository + indexes
+  - [x] ws broadcast
+  - [x] SQLite schema + repository + indexes
 - 프론트엔드
-  - [ ] 탭 레이아웃
-  - [ ] dashboard 위젯
-  - [ ] agents 목록/상세/필터 UI
-  - [ ] 정직원/계약직 라벨 UI
+  - [x] 탭 레이아웃
+  - [x] dashboard 위젯
+  - [x] agents 목록/상세/필터 UI
+  - [x] 정직원/계약직 라벨 UI
   - [ ] 스코프 바(workspace/session/run)
   - [ ] Time Travel 패널(before/after + pivot 하이라이트)
   - [ ] hooks 미설정 배너 + 설치/가이드 진입 버튼
-  - [ ] office renderer
-  - [ ] `kr_t_left_v2` 레이아웃 프리셋 적용
-  - [ ] working paper / failed scream / resting zzz 이펙트 적용
+  - [x] office renderer
+  - [x] `kr_t_left_v2` 레이아웃 프리셋 적용
+  - [x] working paper / failed scream / resting zzz 이펙트 적용
   - [ ] settings 폼
 
 ## 5. 테스트 계획

@@ -25,7 +25,7 @@ async function start(): Promise<void> {
       socket.destroy();
       return;
     }
-    wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.handleUpgrade(request, socket, head, (ws: unknown) => {
       wss.emit("connection", ws, request);
     });
   });
