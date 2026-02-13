@@ -188,7 +188,7 @@ export function DashboardPage(): JSX.Element {
       {error ? <p className="error">{error}</p> : null}
       <div className="scope-bar">
         <label>
-          Workspace
+          {t("common_workspace")}
           <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
             <option value="">{t("common_all")}</option>
             {workspaceOptions.map((w) => (
@@ -197,7 +197,7 @@ export function DashboardPage(): JSX.Element {
           </select>
         </label>
         <label>
-          Terminal
+          {t("common_terminal")}
           <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
             <option value="">{t("common_all")}</option>
             {terminalOptions.map((s) => (
@@ -208,7 +208,7 @@ export function DashboardPage(): JSX.Element {
           </select>
         </label>
         <label>
-          Run
+          {t("common_run")}
           <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
             <option value="">{t("common_all")}</option>
             {runOptions.map((s) => (
@@ -256,7 +256,7 @@ export function DashboardPage(): JSX.Element {
                 <strong>{agent.agent_id}</strong>
                 <span className={`badge ${statusClass(agent.status)}`}>{agent.status}</span>
               </div>
-              <div className="agent-meta">last: {agent.last_event_ts}</div>
+              <div className="agent-meta">{t("common_last")}: {agent.last_event_ts}</div>
             </article>
           ))
         )}
@@ -295,9 +295,9 @@ export function DashboardPage(): JSX.Element {
                 <p className="pivot-line">{eventSummary(context.pivot)}</p>
                 <h4>{t("dashboard_agent_snapshot")}</h4>
                 <p>{context.agent_snapshot.agent_id}</p>
-                <p>status: {context.agent_snapshot.status}</p>
+                <p>{t("common_status")}: {context.agent_snapshot.status}</p>
                 <p>events until pivot: {context.agent_snapshot.event_count_until_pivot}</p>
-                <p>last event ts: {context.agent_snapshot.last_event_ts ?? "-"}</p>
+                <p>{t("common_last")} event ts: {context.agent_snapshot.last_event_ts ?? "-"}</p>
               </div>
               <div className="context-col">
                 <h4>{t("dashboard_after")}</h4>

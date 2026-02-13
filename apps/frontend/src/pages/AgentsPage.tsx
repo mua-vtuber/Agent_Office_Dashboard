@@ -32,12 +32,9 @@ type Scope = {
   last_event_ts: string;
 };
 
-function badge(type: EmploymentType): string {
-  return type === "employee" ? "정직원" : "계약직";
-}
-
 export function AgentsPage(): JSX.Element {
   const { t } = useTranslation();
+  const badge = (type: EmploymentType): string => (type === "employee" ? t("agents_employee") : t("agents_contractor"));
   const [searchParams, setSearchParams] = useSearchParams();
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
@@ -170,18 +167,18 @@ export function AgentsPage(): JSX.Element {
       {error ? <p className="error">{error}</p> : null}
       <div className="scope-bar">
         <label>
-          Workspace
+          {t("common_workspace")}
           <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
-            <option value="">All</option>
+            <option value="">{t("common_all")}</option>
             {workspaceOptions.map((w) => (
               <option key={w} value={w}>{w}</option>
             ))}
           </select>
         </label>
         <label>
-          Terminal
+          {t("common_terminal")}
           <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
-            <option value="">All</option>
+            <option value="">{t("common_all")}</option>
             {terminalOptions.map((s) => (
               <option key={`${s.workspace_id}:${s.terminal_session_id}`} value={s.terminal_session_id}>
                 {s.terminal_session_id}
@@ -190,9 +187,9 @@ export function AgentsPage(): JSX.Element {
           </select>
         </label>
         <label>
-          Run
+          {t("common_run")}
           <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
-            <option value="">All</option>
+            <option value="">{t("common_all")}</option>
             {runOptions.map((s) => (
               <option key={`${s.workspace_id}:${s.terminal_session_id}:${s.run_id}`} value={s.run_id}>
                 {s.run_id}
