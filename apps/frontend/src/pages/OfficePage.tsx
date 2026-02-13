@@ -300,20 +300,16 @@ export function OfficePage(): JSX.Element {
   const [focusedRecentEvents, setFocusedRecentEvents] = useState<RecentEvent[]>([]);
   const [focusedEventsLoading, setFocusedEventsLoading] = useState(false);
   const focusedAgentId = searchParams.get("agent_id") ?? "";
-  const selectedWorkspace = searchParams.get("workspace_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
-  const selectedRun = searchParams.get("run_id") ?? "";
 
   /* Fetch snapshot + settings */
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
-        const q = new URLSearchParams();
-        if (selectedWorkspace) q.set("workspace_id", selectedWorkspace);
-        if (selectedTerminal) q.set("terminal_session_id", selectedTerminal);
-        if (selectedRun) q.set("run_id", selectedRun);
-        const suffix = q.toString() ? `?${q.toString()}` : "";
+        const query = new URLSearchParams();
+        if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
+        const suffix = query.toString() ? `?${query.toString()}` : "";
 
         const [snapshotRes, settingsRes] = await Promise.all([
           authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
@@ -352,7 +348,7 @@ export function OfficePage(): JSX.Element {
       }
     })();
     return () => { mounted = false; };
-  }, [setManyAgents, selectedWorkspace, selectedTerminal, selectedRun]);
+  }, [setManyAgents, selectedTerminal]);
 
   /* Roam tick */
   useEffect(() => {
@@ -367,11 +363,9 @@ export function OfficePage(): JSX.Element {
     setFocusedEventsLoading(true);
     void (async () => {
       try {
-        const q = new URLSearchParams();
-        if (selectedWorkspace) q.set("workspace_id", selectedWorkspace);
-        if (selectedTerminal) q.set("terminal_session_id", selectedTerminal);
-        if (selectedRun) q.set("run_id", selectedRun);
-        const suffix = q.toString() ? `?${q.toString()}` : "";
+        const query = new URLSearchParams();
+        if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
+        const suffix = query.toString() ? `?${query.toString()}` : "";
         const res = await authFetch(`${BACKEND_ORIGIN}/api/agents/${encodeURIComponent(focusedAgentId)}${suffix}`);
         const json = (await res.json()) as { agent?: { recent_events?: RecentEvent[] } };
         if (mounted) setFocusedRecentEvents((json.agent?.recent_events ?? []).slice(0, 3));
@@ -382,7 +376,7 @@ export function OfficePage(): JSX.Element {
       }
     })();
     return () => { mounted = false; };
-  }, [focusedAgentId, selectedWorkspace, selectedTerminal, selectedRun]);
+  }, [focusedAgentId, selectedTerminal]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
   const workers = useMemo(

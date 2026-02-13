@@ -5,7 +5,8 @@ import {
   listEventsAfter,
   listEventsBefore,
   listEventsScoped,
-  listScopes
+  listScopes,
+  listTerminalSessions
 } from "../storage/events-repo";
 import { listStatesScoped } from "../storage/state-repo";
 import { listActiveTasks } from "../storage/tasks-repo";
@@ -47,6 +48,7 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
 
   app.get("/api/sessions", async () => {
     const scopes = listScopes();
+    const terminals = listTerminalSessions();
     if (scopes.length === 0) {
       return {
         scopes: [
@@ -56,10 +58,18 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
             run_id: config.defaultRunId,
             last_event_ts: new Date().toISOString()
           }
+        ],
+        terminals: [
+          {
+            terminal_session_id: config.defaultTerminalSession,
+            terminal_label: config.defaultTerminalSession,
+            workspace_id: config.defaultWorkspace,
+            last_event_ts: new Date().toISOString()
+          }
         ]
       };
     }
-    return { scopes };
+    return { scopes, terminals };
   });
 
   app.get("/api/events/:eventId/context", async (request, reply) => {

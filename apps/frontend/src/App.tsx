@@ -10,10 +10,10 @@ import { useUiSettingsStore } from "./stores/ui-settings-store";
 import { useTranslation } from "react-i18next";
 import { WS_URL, BACKEND_ORIGIN } from "./lib/constants";
 
-type Scope = {
-  workspace_id: string;
+type TerminalSession = {
   terminal_session_id: string;
-  run_id: string;
+  terminal_label: string;
+  workspace_id: string;
   last_event_ts: string;
 };
 
@@ -24,10 +24,8 @@ export default function App(): JSX.Element {
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
   const { t, i18n } = useTranslation();
-  const [scopes, setScopes] = useState<Scope[]>([]);
-  const selectedWorkspace = searchParams.get("workspace_id") ?? "";
+  const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
-  const selectedRun = searchParams.get("run_id") ?? "";
 
   const tabs = [
     { to: "/", label: t("tab_office") },
@@ -53,10 +51,32 @@ export default function App(): JSX.Element {
     void (async () => {
       try {
         const res = await fetch(`${BACKEND_ORIGIN}/api/sessions`);
-        const json = (await res.json()) as { scopes?: Scope[] };
-        if (mounted && Array.isArray(json.scopes)) setScopes(json.scopes);
+        const json = (await res.json()) as { terminals?: TerminalSession[]; scopes?: Array<{ terminal_session_id: string; workspace_id: string; last_event_ts: string }> };
+        if (!mounted) return;
+        if (Array.isArray(json.terminals)) {
+          setTerminals(json.terminals);
+          return;
+        }
+        // Backward-compatible fallback if backend has not been updated yet.
+        if (Array.isArray(json.scopes)) {
+          const byTerminal = new Map<string, TerminalSession>();
+          for (const scope of json.scopes) {
+            const prev = byTerminal.get(scope.terminal_session_id);
+            if (!prev || scope.last_event_ts > prev.last_event_ts) {
+              byTerminal.set(scope.terminal_session_id, {
+                terminal_session_id: scope.terminal_session_id,
+                terminal_label: scope.terminal_session_id,
+                workspace_id: scope.workspace_id,
+                last_event_ts: scope.last_event_ts
+              });
+            }
+          }
+          setTerminals(Array.from(byTerminal.values()).sort((a, b) => b.last_event_ts.localeCompare(a.last_event_ts)));
+          return;
+        }
+        setTerminals([]);
       } catch {
-        if (mounted) setScopes([]);
+        if (mounted) setTerminals([]);
       }
     })();
     return () => {
@@ -64,36 +84,15 @@ export default function App(): JSX.Element {
     };
   }, [location.search]);
 
-  const workspaceOptions = useMemo(() => Array.from(new Set(scopes.map((s) => s.workspace_id))), [scopes]);
-  const terminalOptions = useMemo(() => {
-    if (!selectedWorkspace) return scopes;
-    return scopes.filter((s) => s.workspace_id === selectedWorkspace);
-  }, [scopes, selectedWorkspace]);
-  const runOptions = useMemo(() => {
-    return scopes.filter(
-      (s) =>
-        (!selectedWorkspace || s.workspace_id === selectedWorkspace) &&
-        (!selectedTerminal || s.terminal_session_id === selectedTerminal)
-    );
-  }, [scopes, selectedWorkspace, selectedTerminal]);
+  const terminalOptions = useMemo(() => terminals, [terminals]);
 
-  const updateScope = (next: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): void => {
+  const updateScope = (terminalSessionId: string): void => {
     const params = new URLSearchParams(searchParams);
-    if (next.workspace_id !== undefined) {
-      if (next.workspace_id) params.set("workspace_id", next.workspace_id);
-      else params.delete("workspace_id");
-      params.delete("terminal_session_id");
-      params.delete("run_id");
-    }
-    if (next.terminal_session_id !== undefined) {
-      if (next.terminal_session_id) params.set("terminal_session_id", next.terminal_session_id);
-      else params.delete("terminal_session_id");
-      params.delete("run_id");
-    }
-    if (next.run_id !== undefined) {
-      if (next.run_id) params.set("run_id", next.run_id);
-      else params.delete("run_id");
-    }
+    if (terminalSessionId) params.set("terminal_session_id", terminalSessionId);
+    else params.delete("terminal_session_id");
+    // UI scope is terminal-only. Drop legacy query params to avoid confusion.
+    params.delete("workspace_id");
+    params.delete("run_id");
     setSearchParams(params);
   };
 
@@ -104,32 +103,12 @@ export default function App(): JSX.Element {
           <h1>{t("app_title")}</h1>
           <div className="scope-bar header-scope">
             <label>
-              {t("common_workspace")}
-              <select value={selectedWorkspace} onChange={(e) => updateScope({ workspace_id: e.target.value })}>
-                <option value="">{t("common_all")}</option>
-                {workspaceOptions.map((w) => (
-                  <option key={w} value={w}>{w}</option>
-                ))}
-              </select>
-            </label>
-            <label>
               {t("common_terminal")}
-              <select value={selectedTerminal} onChange={(e) => updateScope({ terminal_session_id: e.target.value })}>
+              <select value={selectedTerminal} onChange={(e) => updateScope(e.target.value)}>
                 <option value="">{t("common_all")}</option>
                 {terminalOptions.map((s) => (
-                  <option key={`${s.workspace_id}:${s.terminal_session_id}`} value={s.terminal_session_id}>
-                    {s.terminal_session_id}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("common_run")}
-              <select value={selectedRun} onChange={(e) => updateScope({ run_id: e.target.value })}>
-                <option value="">{t("common_all")}</option>
-                {runOptions.map((s) => (
-                  <option key={`${s.workspace_id}:${s.terminal_session_id}:${s.run_id}`} value={s.run_id}>
-                    {s.run_id}
+                  <option key={s.terminal_session_id} value={s.terminal_session_id}>
+                    {s.terminal_label} ({s.workspace_id})
                   </option>
                 ))}
               </select>

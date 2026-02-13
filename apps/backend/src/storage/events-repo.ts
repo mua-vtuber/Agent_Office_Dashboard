@@ -110,6 +110,52 @@ export function listScopes(): Array<{
     }>;
 }
 
+export function listTerminalSessions(): Array<{
+  terminal_session_id: string;
+  terminal_label: string;
+  workspace_id: string;
+  last_event_ts: string;
+}> {
+  const rows = db
+    .prepare(
+      `SELECT e.terminal_session_id, e.workspace_id, e.ts AS last_event_ts, e.raw_json
+       FROM events e
+       INNER JOIN (
+         SELECT terminal_session_id, MAX(ts) AS max_ts
+         FROM events
+         GROUP BY terminal_session_id
+       ) latest
+         ON latest.terminal_session_id = e.terminal_session_id
+        AND latest.max_ts = e.ts
+       ORDER BY e.ts DESC`
+    )
+    .all() as Array<{
+      terminal_session_id: string;
+      workspace_id: string;
+      last_event_ts: string;
+      raw_json: string;
+    }>;
+
+  return rows.map((row) => {
+    let terminalLabel = row.terminal_session_id;
+    try {
+      const raw = JSON.parse(row.raw_json) as { payload?: { _meta?: { terminal_label?: string } } };
+      const fromMeta = raw.payload?._meta?.terminal_label;
+      if (typeof fromMeta === "string" && fromMeta.trim()) {
+        terminalLabel = fromMeta;
+      }
+    } catch {
+      // keep fallback label
+    }
+    return {
+      terminal_session_id: row.terminal_session_id,
+      terminal_label: terminalLabel,
+      workspace_id: row.workspace_id,
+      last_event_ts: row.last_event_ts
+    };
+  });
+}
+
 export function getEventById(eventId: string): EventRow | null {
   const row = db.prepare("SELECT * FROM events WHERE id = ? LIMIT 1").get(eventId) as EventRow | undefined;
   return row ?? null;

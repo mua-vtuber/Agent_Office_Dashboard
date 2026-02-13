@@ -90,17 +90,13 @@ export function DashboardPage(): JSX.Element {
   const [context, setContext] = useState<EventContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
   const syncIntervalRef = useRef(DEFAULT_SYNC_INTERVAL_SEC);
-  const selectedWorkspace = searchParams.get("workspace_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
-  const selectedRun = searchParams.get("run_id") ?? "";
 
   const buildSuffix = useCallback((): string => {
     const query = new URLSearchParams();
-    if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
     if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
-    if (selectedRun) query.set("run_id", selectedRun);
     return query.toString() ? `?${query.toString()}` : "";
-  }, [selectedWorkspace, selectedTerminal, selectedRun]);
+  }, [selectedTerminal]);
 
   useEffect(() => {
     let mounted = true;

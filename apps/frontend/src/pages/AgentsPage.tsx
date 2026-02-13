@@ -37,9 +37,7 @@ export function AgentsPage(): JSX.Element {
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [employmentFilter, setEmploymentFilter] = useState<"all" | EmploymentType>("all");
   const [error, setError] = useState<string>("");
-  const selectedWorkspace = searchParams.get("workspace_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
-  const selectedRun = searchParams.get("run_id") ?? "";
   const selectedAgentParam = searchParams.get("agent_id") ?? "";
 
   useEffect(() => {
@@ -47,9 +45,7 @@ export function AgentsPage(): JSX.Element {
     void (async () => {
       try {
         const query = new URLSearchParams();
-        if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
-        if (selectedRun) query.set("run_id", selectedRun);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
         const agentsRes = await authFetch(`${BACKEND_ORIGIN}/api/agents${suffix}`);
@@ -71,7 +67,7 @@ export function AgentsPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [selectedWorkspace, selectedTerminal, selectedRun, selectedAgentParam]);
+  }, [selectedTerminal, selectedAgentParam]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -79,9 +75,7 @@ export function AgentsPage(): JSX.Element {
     void (async () => {
       try {
         const query = new URLSearchParams();
-        if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
-        if (selectedRun) query.set("run_id", selectedRun);
         const suffix = query.toString() ? `?${query.toString()}` : "";
         const encoded = encodeURIComponent(selectedId);
         const res = await authFetch(`${BACKEND_ORIGIN}/api/agents/${encoded}${suffix}`);
@@ -94,7 +88,7 @@ export function AgentsPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [selectedId, selectedWorkspace, selectedTerminal, selectedRun]);
+  }, [selectedId, selectedTerminal]);
 
   const filteredAgents = useMemo(() => {
     if (employmentFilter === "all") return agents;
