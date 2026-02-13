@@ -91,16 +91,40 @@ function extractThinking(input: Record<string, unknown>): string | null {
   return thinkingBlocks[thinkingBlocks.length - 1]!.thinking;
 }
 
+type HookMeta = {
+  workspace?: string;
+  terminal_session?: string;
+  run?: string;
+  collected_at?: string;
+};
+
+function parseMeta(input: Record<string, unknown>): HookMeta {
+  const raw = input._meta;
+  if (!raw || typeof raw !== "object") return {};
+  const meta = raw as Record<string, unknown>;
+  const parsed: HookMeta = {};
+  if (typeof meta.workspace === "string") parsed.workspace = meta.workspace;
+  if (typeof meta.terminal_session === "string") parsed.terminal_session = meta.terminal_session;
+  if (typeof meta.run === "string") parsed.run = meta.run;
+  if (typeof meta.collected_at === "string") parsed.collected_at = meta.collected_at;
+  return parsed;
+}
+
 export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEvent {
+  const meta = parseMeta(input);
   const rawEventName = (input.event_name ?? input.hook_event ?? "unknown") as string;
   const sessionId = String(input.session_id ?? "unknown-session");
-  const agentName = String(input.agent_name ?? "leader");
-  const teamName = String(input.team_name ?? config.defaultWorkspace);
+  const agentName = typeof input.agent_name === "string" ? input.agent_name : "";
+  const teamName = typeof input.team_name === "string" ? input.team_name : "";
   const toolName = String(input.tool_name ?? "");
   const toolInput = (typeof input.tool_input === "object" && input.tool_input !== null
     ? input.tool_input
     : {}) as Record<string, unknown>;
   const error = input.error;
+  const workspaceId = String(input.workspace_id ?? meta.workspace ?? teamName ?? config.defaultWorkspace);
+  const terminalSessionId = String(input.terminal_session_id ?? meta.terminal_session ?? sessionId);
+  const runId = String(input.run_id ?? meta.run ?? config.defaultRunId);
+  const level = typeof input.level === "string" ? input.level : "";
 
   const type = deriveSemanticType(rawEventName, toolName, toolInput, error);
   const severity: NormalizedEvent["severity"] =
@@ -108,7 +132,11 @@ export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEv
     : rawEventName === "Notification" && input.level === "error" ? "error"
     : "info";
 
-  const ts = nowIso();
+  const resolvedAgentName = agentName || `session-${sessionId.slice(0, 8)}`;
+  const agentNamespace = teamName || workspaceId;
+  const resolvedAgentId = `${agentNamespace}/${resolvedAgentName}`;
+
+  const ts = meta.collected_at ?? nowIso();
 
   const normalized = normalizedEventSchema.parse({
     id: makeFingerprint(sessionId, toolName, ts, input),
@@ -116,11 +144,11 @@ export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEv
     ts,
     type,
     source: "hook",
-    workspace_id: String(input.workspace_id ?? teamName),
-    terminal_session_id: String(input.terminal_session_id ?? sessionId),
-    run_id: String(input.run_id ?? config.defaultRunId),
+    workspace_id: workspaceId,
+    terminal_session_id: terminalSessionId,
+    run_id: runId,
     session_id: sessionId,
-    agent_id: `${teamName}/${agentName}`,
+    agent_id: resolvedAgentId,
     target_agent_id: (input.target_agent_id as string | undefined) ?? null,
     task_id: (input.task_id as string | undefined) ?? null,
     severity,
@@ -130,6 +158,14 @@ export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEv
       error_message: typeof error === "string" ? error : undefined,
       summary: input.summary,
       thinking: extractThinking(input),
+      message: input.message,
+      level: input.level,
+      reason: input.reason,
+      result: input.result,
+      tool_input: input.tool_input,
+      tool_result: input.tool_result,
+      agent_type: input.agent_type,
+      parent_session_id: input.parent_session_id
     },
     raw: {
       provider: "claude_code",
