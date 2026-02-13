@@ -7,6 +7,7 @@ import { getState, upsertState } from "../storage/state-repo";
 import { getAgent, upsertAgent } from "../storage/agents-repo";
 import { nextStatus, getAppSettings } from "../services/state-machine";
 import { broadcast } from "../ws/gateway";
+import { serializeError, summarizeHookBody } from "../utils/logging";
 
 export async function registerIngestRoutes(app: FastifyInstance): Promise<void> {
   app.post("/ingest/hooks", async (request, reply) => {
@@ -102,10 +103,29 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
         },
       });
 
+      app.log.info(
+        {
+          event_id: event.id,
+          event_type: event.type,
+          agent_id: event.agent_id,
+          workspace_id: event.workspace_id,
+          terminal_session_id: event.terminal_session_id,
+          run_id: event.run_id
+        },
+        "ingest processed"
+      );
+
       return reply.code(200).send({ ok: true, event_id: event.id });
     } catch (error) {
       const message = error instanceof Error ? error.message : "unknown error";
-      app.log.error({ error }, "ingest processing failed");
+      app.log.error(
+        {
+          error: serializeError(error),
+          hook_body: summarizeHookBody(body),
+          request_id: request.id
+        },
+        "failed to process ingest event"
+      );
       return reply.code(422).send({ ok: false, error: message });
     }
   });

@@ -101,7 +101,7 @@ agent-office-dashboard/
 - 공통
   - [x] 이벤트 스키마 버전 고정
   - [x] mock 이벤트 생성기 작성
-  - [ ] 에러 로깅 규칙 반영
+  - [x] 에러 로깅 규칙 반영
   - [x] i18n 메시지 키/번역 파일 구성(ko/en)
 - 백엔드
   - [x] ingest API

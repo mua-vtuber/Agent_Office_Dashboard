@@ -9,9 +9,35 @@ import { registerIntegrationRoutes } from "./routes/integration";
 import { registerSettingsRoutes } from "./routes/settings";
 import { wss, handleConnection } from "./ws/gateway";
 import { startHeartbeat } from "./services/heartbeat";
+import { serializeError } from "./utils/logging";
 
 async function start(): Promise<void> {
   const app = Fastify({ logger: true });
+
+  app.setErrorHandler((error, request, reply) => {
+    app.log.error(
+      {
+        error: serializeError(error),
+        request_id: request.id,
+        method: request.method,
+        url: request.url
+      },
+      "request failed"
+    );
+    reply.status(500).send({ ok: false, message: "internal server error", request_id: request.id });
+  });
+
+  app.setNotFoundHandler((request, reply) => {
+    app.log.warn(
+      {
+        request_id: request.id,
+        method: request.method,
+        url: request.url
+      },
+      "route not found"
+    );
+    reply.status(404).send({ ok: false, message: "not found", request_id: request.id });
+  });
 
   await app.register(cors, {
     origin: config.corsOrigin || true,
