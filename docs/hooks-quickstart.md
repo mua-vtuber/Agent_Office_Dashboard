@@ -89,7 +89,7 @@ Claude Code hook 이벤트를 전송하는 최소 설정이다.
 
 - `AOD_COLLECTOR_URL` (기본: `http://127.0.0.1:4800/ingest/hooks`)
 - `AOD_WORKSPACE_ID` (기본: 현재 폴더명)
-- `AOD_TERMINAL_SESSION_ID` (기본: `TERM_SESSION_ID` → 현재 `tty` → `CLAUDE_SESSION_ID`)
+- `AOD_TERMINAL_SESSION_ID` (기본: `TERM_SESSION_ID` → 현재 `tty` → payload의 `parent_session_id`/`session_id`)
 - `AOD_TERMINAL_LABEL` (예: `backend-wsl`, `hotfix-term`)
 - `AOD_RUN_ID` (예: `run-2026-02-13-01`)
 - `DASHBOARD_TOKEN` (인증 헤더 필요 시)

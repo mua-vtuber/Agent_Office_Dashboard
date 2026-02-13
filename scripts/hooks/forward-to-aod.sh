@@ -15,7 +15,7 @@ if [ -n "${tty_raw}" ] && [ "${tty_raw}" != "not a tty" ]; then
   tty_id="tty_${tty_raw#/dev/}"
   tty_id="${tty_id//\//_}"
 fi
-terminal_session_id="${AOD_TERMINAL_SESSION_ID:-${TERM_SESSION_ID:-${tty_id:-${CLAUDE_SESSION_ID:-}}}}"
+terminal_session_id="${AOD_TERMINAL_SESSION_ID:-${TERM_SESSION_ID:-${tty_id:-}}}"
 run_id="${AOD_RUN_ID:-}"
 terminal_label="${AOD_TERMINAL_LABEL:-${WT_PROFILE_ID:-${TERM_PROGRAM:-terminal}}}"
 collected_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -36,10 +36,28 @@ meta = obj.get("_meta")
 if not isinstance(meta, dict):
     meta = {}
 
+existing_terminal = obj.get("terminal_session_id")
+if not isinstance(existing_terminal, str):
+    existing_terminal = ""
+
+meta_terminal = meta.get("terminal_session")
+if not isinstance(meta_terminal, str):
+    meta_terminal = ""
+
+parent_session = obj.get("parent_session_id")
+if not isinstance(parent_session, str):
+    parent_session = ""
+
+session_id = obj.get("session_id")
+if not isinstance(session_id, str):
+    session_id = ""
+
+effective_terminal = existing_terminal or meta_terminal or terminal_session_id or parent_session or session_id
+
 if workspace_id and "workspace" not in meta:
     meta["workspace"] = workspace_id
-if terminal_session_id and "terminal_session" not in meta:
-    meta["terminal_session"] = terminal_session_id
+if effective_terminal and "terminal_session" not in meta:
+    meta["terminal_session"] = effective_terminal
 if run_id and "run" not in meta:
     meta["run"] = run_id
 if terminal_label and "terminal_label" not in meta:
@@ -51,12 +69,6 @@ obj["_meta"] = meta
 
 if workspace_id and "workspace_id" not in obj:
     obj["workspace_id"] = workspace_id
-effective_terminal = terminal_session_id
-if not effective_terminal:
-    # For subagent events, parent_session_id is usually a better terminal-level fallback than session_id.
-    parent = obj.get("parent_session_id")
-    if isinstance(parent, str) and parent:
-        effective_terminal = parent
 if effective_terminal and "terminal_session_id" not in obj:
     obj["terminal_session_id"] = effective_terminal
 if run_id and "run_id" not in obj:
