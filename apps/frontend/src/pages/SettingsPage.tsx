@@ -217,7 +217,7 @@ export function SettingsPage(): JSX.Element {
       <h2>{t("settings_title")}</h2>
 
       <div className="split-layout">
-        <article className="panel">
+        <article className="panel settings-form">
           <h3>{t("settings_lang_motion")}</h3>
           <p>{t("settings_lang_motion_desc")}</p>
           <label>
@@ -241,6 +241,7 @@ export function SettingsPage(): JSX.Element {
               <option value="kr_t_left_v2">kr_t_left_v2</option>
             </select>
           </label>
+          <p className="settings-hint">{t("settings_layout_profile_help")}</p>
           <div className="action-row">
             <button className="list-btn" onClick={() => void saveSettings()} disabled={saving || !hasDirty}>
               {saving ? t("common_loading") : t("settings_btn_save")}
