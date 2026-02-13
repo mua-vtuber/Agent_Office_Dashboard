@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:00:12.345Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Team leader spawns researcher agent - normal team workflow start"
+  },
+  "event_name": "SubagentStart",
+  "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "agent_name": "researcher",
+  "agent_type": "Explore",
+  "parent_session_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "team_name": "feature-auth",
+  "prompt": "Search the codebase for existing authentication patterns. Check middleware/, routes/, and services/ directories for any auth-related code, JWT usage, or session management."
+}

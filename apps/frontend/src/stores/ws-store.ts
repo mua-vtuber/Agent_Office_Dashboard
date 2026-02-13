@@ -58,6 +58,22 @@ export const useWsStore = create<WsStore>((set, get) => {
           data?: Record<string, unknown>;
         };
 
+        if (msg.type === "snapshot" && msg.data) {
+          const d = msg.data as { agents?: Array<{ agent_id: string; status: string; last_event_ts: string }>; recent_events?: unknown[] };
+          if (Array.isArray(d.agents)) {
+            useAgentStore.getState().setMany(
+              d.agents.map((a) => ({
+                agent_id: a.agent_id,
+                status: a.status,
+                last_event_ts: a.last_event_ts ?? new Date().toISOString()
+              }))
+            );
+          }
+          if (Array.isArray(d.recent_events)) {
+            useEventStore.getState().setAll(d.recent_events);
+          }
+        }
+
         if (msg.type === "event" && msg.data) {
           useEventStore.getState().add(msg.data);
         }
@@ -70,6 +86,9 @@ export const useWsStore = create<WsStore>((set, get) => {
             thinking: d.thinking ?? null,
             last_event_ts: d.ts,
           });
+        }
+        if (msg.type === "heartbeat") {
+          set({ status: "connected" });
         }
       } catch {
         // ignore malformed messages

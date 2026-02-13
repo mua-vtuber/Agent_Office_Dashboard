@@ -1,0 +1,20 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:08:11.200Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Leader's DM to tester delivered successfully"
+  },
+  "event_name": "PostToolUse",
+  "session_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "tool_name": "SendMessage",
+  "tool_input": {
+    "type": "message",
+    "recipient": "tester",
+    "content": "The coder has finished implementing auth middleware. Please write integration tests.",
+    "summary": "Test auth middleware implementation"
+  },
+  "tool_result": "Message delivered to tester.",
+  "error": null
+}

@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:07:56.100Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Info notification - coder agent finished its task"
+  },
+  "event_name": "Notification",
+  "session_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "message": "Agent 'coder' has completed its task successfully.",
+  "level": "info"
+}

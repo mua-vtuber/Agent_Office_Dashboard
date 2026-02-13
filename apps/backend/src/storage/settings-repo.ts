@@ -31,3 +31,12 @@ export function listSettings(): Record<string, unknown> {
   }
   return result;
 }
+
+/** Alias used by gateway/snapshot for bulk settings retrieval */
+export const listSettingsObject = listSettings;
+
+export function putSettings(partial: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(partial)) {
+    upsertStmt.run({ key, value_json: JSON.stringify(value) });
+  }
+}

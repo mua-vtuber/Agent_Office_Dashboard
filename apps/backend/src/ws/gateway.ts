@@ -1,11 +1,13 @@
 import { WebSocketServer } from "ws";
-
-// --- Client metadata ---
+import { listEvents } from "../storage/events-repo";
+import { listStates } from "../storage/state-repo";
+import { listSettingsObject } from "../storage/settings-repo";
 
 type WsClient = {
   readyState: number;
   send: (data: string) => void;
   on: (event: string, handler: (...args: unknown[]) => void) => void;
+  close: () => void;
 };
 
 type ClientMeta = {
@@ -16,8 +18,38 @@ const clientMeta = new WeakMap<object, ClientMeta>();
 
 export const wss = new WebSocketServer({ noServer: true });
 
+function sendJson(client: WsClient, message: unknown): void {
+  if (client.readyState !== 1) return;
+  client.send(JSON.stringify(message));
+}
+
+function snapshotPayload(): Record<string, unknown> {
+  return {
+    agents: listStates(),
+    tasks: [],
+    sessions: [],
+    settings: listSettingsObject(),
+    recent_events: listEvents(100),
+    server_ts: new Date().toISOString(),
+  };
+}
+
+// --- Scope helpers ---
+
+function scopeKey(w?: string, t?: string, r?: string): string {
+  return `${w ?? "*"}:${t ?? "*"}:${r ?? "*"}`;
+}
+
+// --- Connection handler ---
+
 export function handleConnection(ws: WsClient): void {
   clientMeta.set(ws, { subscriptions: new Set() });
+
+  sendJson(ws, { type: "snapshot", data: snapshotPayload() });
+
+  const heartbeatTimer = setInterval(() => {
+    sendJson(ws, { type: "heartbeat", ts: new Date().toISOString() });
+  }, 15000);
 
   ws.on("message", (raw: unknown) => {
     try {
@@ -33,24 +65,22 @@ export function handleConnection(ws: WsClient): void {
       if (msg.type === "subscribe") {
         const key = scopeKey(msg.workspace_id, msg.terminal_session_id, msg.run_id);
         meta.subscriptions.add(key);
-        ws.send(JSON.stringify({ type: "subscribed", scope: key }));
+        sendJson(ws, { type: "snapshot", data: snapshotPayload() });
       } else if (msg.type === "unsubscribe") {
         const key = scopeKey(msg.workspace_id, msg.terminal_session_id, msg.run_id);
         meta.subscriptions.delete(key);
-        ws.send(JSON.stringify({ type: "unsubscribed", scope: key }));
+        sendJson(ws, { type: "unsubscribed", scope: key });
       } else if (msg.type === "ping") {
-        ws.send(JSON.stringify({ type: "pong", ts: new Date().toISOString() }));
+        sendJson(ws, { type: "pong", ts: new Date().toISOString() });
       }
     } catch {
-      ws.send(JSON.stringify({ type: "error", message: "invalid message format" }));
+      sendJson(ws, { type: "error", message: "invalid message format" });
     }
   });
-}
 
-// --- Scope helpers ---
-
-function scopeKey(w?: string, t?: string, r?: string): string {
-  return `${w ?? "*"}:${t ?? "*"}:${r ?? "*"}`;
+  ws.on("close", () => {
+    clearInterval(heartbeatTimer);
+  });
 }
 
 // --- Broadcast ---

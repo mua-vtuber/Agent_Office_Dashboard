@@ -28,6 +28,7 @@ declare module "ws" {
   export class WebSocketServer {
     clients: Set<WebSocketLike>;
     constructor(options: { noServer: boolean });
+    on(event: "connection", cb: (socket: unknown) => void): void;
     handleUpgrade(
       request: unknown,
       socket: unknown,

@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T10:08:30.456Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-e5f6g7h8",
+    "run": "run-2026-02-13-002",
+    "description": "User presses Ctrl+C to interrupt - session aborted mid-work"
+  },
+  "event_name": "Stop",
+  "session_id": "c9876543-dddd-eeee-ffff-444455556666",
+  "reason": "user_interrupt",
+  "summary": "Session interrupted by user. Was in the middle of reviewing database changes. hotfix-coder had completed its task, reviewer was still analyzing."
+}

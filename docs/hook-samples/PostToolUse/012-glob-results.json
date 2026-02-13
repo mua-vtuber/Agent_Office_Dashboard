@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:00:31.100Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Researcher finds route files via glob"
+  },
+  "event_name": "PostToolUse",
+  "session_id": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "tool_name": "Glob",
+  "tool_input": {
+    "pattern": "apps/backend/src/routes/**/*.ts",
+    "path": "/home/taniar/git/agent-office-dashboard"
+  },
+  "tool_result": "apps/backend/src/routes/ingest.ts\napps/backend/src/routes/integration.ts\napps/backend/src/routes/snapshot.ts\napps/backend/src/routes/events.ts\napps/backend/src/routes/sessions.ts\napps/backend/src/routes/agents.ts\napps/backend/src/routes/settings.ts",
+  "error": null
+}

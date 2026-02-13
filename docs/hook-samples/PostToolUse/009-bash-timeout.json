@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:10:35.999Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Tester's bash command times out - long-running test exceeded limit"
+  },
+  "event_name": "PostToolUse",
+  "session_id": "e4d909c2-90d0-fb58-acd0-351234567890",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cd /home/taniar/git/agent-office-dashboard && npx vitest run --coverage",
+    "description": "Run full test suite with coverage",
+    "timeout": 60000
+  },
+  "tool_result": null,
+  "error": "Command timed out after 60000ms. The command was still running when the timeout was reached."
+}

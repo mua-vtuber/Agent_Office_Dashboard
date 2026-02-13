@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:12:44.876Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Tester agent stops with error - hit max turns limit"
+  },
+  "event_name": "SubagentStop",
+  "session_id": "e4d909c2-90d0-fb58-acd0-351234567890",
+  "agent_name": "tester",
+  "agent_type": "general-purpose",
+  "parent_session_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "team_name": "feature-auth",
+  "result": "max_turns_reached"
+}

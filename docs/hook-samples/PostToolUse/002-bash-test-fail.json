@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:09:45.666Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Tester's second test run fails - regression in login route"
+  },
+  "event_name": "PostToolUse",
+  "session_id": "e4d909c2-90d0-fb58-acd0-351234567890",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cd /home/taniar/git/agent-office-dashboard && npx vitest run apps/backend/src/__tests__/login.test.ts",
+    "description": "Run login route tests"
+  },
+  "tool_result": null,
+  "error": "Command failed with exit code 1:\n RUN  v3.0.4\n\n ✓ login route > should return JWT on valid credentials\n ✗ login route > should return 401 on invalid password\n   → expected 401, received 500\n ✗ login route > should return 400 on missing fields\n   → expected 400, received 500\n\n Test Files  1 failed (1)\n      Tests  2 failed | 1 passed (3)"
+}

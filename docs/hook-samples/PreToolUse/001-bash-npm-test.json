@@ -1,0 +1,17 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:09:01.100Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Tester agent runs npm test via Bash tool"
+  },
+  "event_name": "PreToolUse",
+  "session_id": "e4d909c2-90d0-fb58-acd0-351234567890",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cd /home/taniar/git/agent-office-dashboard && npx vitest run apps/backend/src/__tests__/auth.test.ts",
+    "description": "Run auth middleware integration tests",
+    "timeout": 30000
+  }
+}

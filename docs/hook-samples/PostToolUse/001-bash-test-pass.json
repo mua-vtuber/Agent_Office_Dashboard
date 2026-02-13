@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:09:15.444Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Tester's npm test succeeds - all tests pass"
+  },
+  "event_name": "PostToolUse",
+  "session_id": "e4d909c2-90d0-fb58-acd0-351234567890",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cd /home/taniar/git/agent-office-dashboard && npx vitest run apps/backend/src/__tests__/auth.test.ts",
+    "description": "Run auth middleware integration tests",
+    "timeout": 30000
+  },
+  "tool_result": " RUN  v3.0.4 /home/taniar/git/agent-office-dashboard\n\n ✓ apps/backend/src/__tests__/auth.test.ts (4 tests) 245ms\n   ✓ auth middleware > should reject missing token\n   ✓ auth middleware > should reject expired token\n   ✓ auth middleware > should reject malformed token\n   ✓ auth middleware > should accept valid token\n\n Test Files  1 passed (1)\n      Tests  4 passed (4)\n   Start at  09:09:02\n   Duration  1.23s",
+  "error": null
+}

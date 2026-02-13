@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:03:45.222Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Coder installs jsonwebtoken package via pnpm"
+  },
+  "event_name": "PreToolUse",
+  "session_id": "a3bb189e-8bf9-3888-9912-ace4e6543002",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "pnpm --filter @aod/backend add jsonwebtoken && pnpm --filter @aod/backend add -D @types/jsonwebtoken",
+    "description": "Install jsonwebtoken and its type definitions"
+  }
+}

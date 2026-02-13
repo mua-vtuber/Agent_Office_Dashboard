@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:01:46.888Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Leader's Task tool call succeeds - coder agent spawned"
+  },
+  "event_name": "PostToolUse",
+  "session_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "tool_name": "Task",
+  "tool_input": {
+    "description": "Implement auth middleware",
+    "prompt": "Implement JWT-based authentication middleware...",
+    "subagent_type": "general-purpose",
+    "name": "coder",
+    "team_name": "feature-auth"
+  },
+  "tool_result": "Agent coder completed successfully. Created auth middleware at apps/backend/src/middleware/auth.ts with JWT verification, added login route at POST /api/auth/login, and protected /api/agents and /api/events endpoints.\n\nagentId: a3bb189e (for resuming)",
+  "error": null
+}

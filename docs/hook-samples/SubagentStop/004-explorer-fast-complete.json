@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "collected_at": "2026-02-13T09:03:18.334Z",
+    "workspace": "agent-office-dashboard",
+    "terminal_session": "term-a1b2c3d4",
+    "run": "run-2026-02-13-001",
+    "description": "Explorer sub-agent completes quickly (nested agent, spawned by coder)"
+  },
+  "event_name": "SubagentStop",
+  "session_id": "b7e813a2-1cc3-4572-ab77-1234abcd5678",
+  "agent_name": "explorer",
+  "agent_type": "Explore",
+  "parent_session_id": "a3bb189e-8bf9-3888-9912-ace4e6543002",
+  "team_name": "feature-auth",
+  "result": "completed"
+}
