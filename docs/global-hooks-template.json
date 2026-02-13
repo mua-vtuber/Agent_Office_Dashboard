@@ -1,0 +1,70 @@
+{
+  "hooks": {
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

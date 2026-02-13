@@ -84,6 +84,12 @@ Claude Code hook 이벤트를 전송하는 최소 설정이다.
 }
 ```
 
+
+## 2-1) 전역 Hook 템플릿
+- 파일: `docs/global-hooks-template.json`
+- 설치 대상: `~/.claude/settings.json`
+- 기존 전역 설정이 있으면 `hooks` 섹션만 병합
+
 ## 3) 선택 환경변수
 터미널 이름/실행 구분을 강제로 넣고 싶으면 Claude 실행 전에 설정:
 
