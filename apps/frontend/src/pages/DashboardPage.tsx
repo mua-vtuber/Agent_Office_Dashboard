@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
 import { BACKEND_ORIGIN } from "../lib/constants";
+import { Link } from "react-router-dom";
 
 type SnapshotAgent = {
   agent_id: string;
@@ -32,6 +33,11 @@ type EventContext = {
   server_ts: string;
 };
 
+type IntegrationStatus = {
+  hooks_configured: boolean;
+  mode: "normal" | "degraded";
+};
+
 function statusClass(status: string): string {
   if (status === "failed") return "critical";
   if (status === "pending_input") return "warn";
@@ -51,6 +57,7 @@ export function DashboardPage(): JSX.Element {
   const setManyAgents = useAgentStore((s) => s.setMany);
 
   const [error, setError] = useState<string>("");
+  const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [context, setContext] = useState<EventContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
@@ -59,13 +66,15 @@ export function DashboardPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const [eventsRes, snapshotRes] = await Promise.all([
+        const [eventsRes, snapshotRes, integrationRes] = await Promise.all([
           fetch(`${BACKEND_ORIGIN}/api/events`),
-          fetch(`${BACKEND_ORIGIN}/api/snapshot`)
+          fetch(`${BACKEND_ORIGIN}/api/snapshot`),
+          fetch(`${BACKEND_ORIGIN}/api/integration/status`)
         ]);
 
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
         const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[] };
+        const integrationJson = (await integrationRes.json()) as IntegrationStatus;
 
         if (!mounted) return;
 
@@ -83,6 +92,7 @@ export function DashboardPage(): JSX.Element {
             }))
           );
         }
+        setIntegration(integrationJson);
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "failed to load dashboard");
       }
@@ -121,6 +131,12 @@ export function DashboardPage(): JSX.Element {
       <h2>Dashboard</h2>
       <p>상태 카드 + 타임라인 + Time Travel(전후 문맥) 패널.</p>
       {error ? <p className="error">{error}</p> : null}
+      {integration && !integration.hooks_configured ? (
+        <div className="hooks-banner">
+          Hooks 미설정 상태입니다. 현재 모드: {integration.mode}. 실시간 정확도가 낮을 수 있습니다.
+          <Link to="/settings"> 설정에서 안내/설치</Link>
+        </div>
+      ) : null}
 
       <div className="stats-grid">
         <article className="stat-card">

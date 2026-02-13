@@ -224,6 +224,15 @@ body {
   font-weight: 600;
 }
 
+.hooks-banner {
+  margin: 10px 0 14px;
+  border: 1px solid #facc15;
+  background: #fffbeb;
+  color: #854d0e;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -364,6 +373,12 @@ body {
   border-left: 3px solid var(--accent);
   padding-left: 8px;
   font-weight: 600;
+}
+
+.action-row {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
 }
 
 @media (max-width: 900px) {

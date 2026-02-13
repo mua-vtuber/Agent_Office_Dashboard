@@ -108,8 +108,8 @@ agent-office-dashboard/
   - [x] snapshot API
   - [ ] sessions API(workspace/session/run)
   - [x] agents API(`/api/agents`, `/api/agents/:agent_id`)
-  - [ ] integration status API (`/api/integration/status`)
-  - [ ] hooks install API (`/api/integration/hooks/install`)
+  - [x] integration status API (`/api/integration/status`)
+  - [x] hooks install API (`/api/integration/hooks/install`)
   - [x] ws broadcast
   - [x] SQLite schema + repository + indexes
 - 프론트엔드
@@ -119,11 +119,11 @@ agent-office-dashboard/
   - [x] 정직원/계약직 라벨 UI
   - [ ] 스코프 바(workspace/session/run)
   - [x] Time Travel 패널(before/after + pivot 하이라이트)
-  - [ ] hooks 미설정 배너 + 설치/가이드 진입 버튼
+  - [x] hooks 미설정 배너 + 설치/가이드 진입 버튼
   - [x] office renderer
   - [x] `kr_t_left_v2` 레이아웃 프리셋 적용
   - [x] working paper / failed scream / resting zzz 이펙트 적용
-  - [ ] settings 폼
+  - [x] settings 폼
 
 ## 5. 테스트 계획
 - 단위 테스트

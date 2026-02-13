@@ -31,6 +31,13 @@ export function listEventsByAgent(agentId: string, limit = 20): unknown[] {
     .all(agentId, limit);
 }
 
+export function latestHookEventTs(): string | null {
+  const row = db
+    .prepare("SELECT ts FROM events WHERE source = 'hook' ORDER BY ts DESC LIMIT 1")
+    .get() as { ts?: string } | undefined;
+  return row?.ts ?? null;
+}
+
 type EventRow = {
   id: string;
   ts: string;

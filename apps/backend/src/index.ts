@@ -4,6 +4,7 @@ import { config } from "./config";
 import { registerIngestRoutes } from "./routes/ingest";
 import { registerSnapshotRoutes } from "./routes/snapshot";
 import { registerAgentRoutes } from "./routes/agents";
+import { registerIntegrationRoutes } from "./routes/integration";
 import { wss } from "./ws/gateway";
 
 async function start(): Promise<void> {
@@ -17,6 +18,7 @@ async function start(): Promise<void> {
   await registerIngestRoutes(app);
   await registerSnapshotRoutes(app);
   await registerAgentRoutes(app);
+  await registerIntegrationRoutes(app);
 
   app.get("/api/health", async () => ({ ok: true }));
 
