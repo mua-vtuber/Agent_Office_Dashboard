@@ -1,7 +1,7 @@
-# Critical Issues Fix Plan
+# Critical Issues Fix Plan (v2 — 통합본)
 
-작성일: 2026-02-14
-근거: `docs/archive/docs-code-mismatch-report.md`
+작성일: 2026-02-14 (2차 취합)
+근거: `docs/archive/docs-code-mismatch-report.md` (통합본 26건)
 원칙:
 1. 코드 품질 > 작업량/난이도
 2. 구조적 효율 — 의존성 방향을 따라 하위 계층부터 수정
@@ -10,18 +10,36 @@
 
 ---
 
+## 범위
+
+통합 리포트의 CRITICAL 7건 + MAJOR 10건을 대상으로 한다.
+MINOR 9건은 각 Step 진행 중 자연스럽게 함께 해소되거나, 별도 후속 패치로 처리한다.
+
+| 구분 | 해소 대상 이슈 번호 |
+|---|---|
+| **본 계획에서 해소** | #1~#17 (CRITICAL + MAJOR 전체) + #18,#19,#20,#24,#25 (연관 MINOR) |
+| **후속 처리** | #21(인증), #22(이동속도), #23(fingerprint), #26(seed-mock) |
+
+---
+
 ## 의존성 그래프
 
 ```
-Layer 0 (Schema)     : C-01, C-03
-Layer 1 (Storage)    : C-06
-Layer 2 (Config/API) : C-04, C-05
-Layer 3 (Logic)      : C-02, C-07, H-02, H-03, H-04
-Layer 4 (Infra)      : C-08, C-10
-Layer 5 (Client)     : C-09, H-01, H-06, H-07
+Layer 0 (Schema)     : #5 Settings 스키마, #7 AgentState 스키마
+Layer 1 (Storage)    : #4 DB 테이블 (agents, tasks, sessions)
+Layer 2 (Config/API) : #6 Settings API, #10 URL 동적화
+Layer 3 (Normalizer) : #3 의미적 이벤트 추출, #14 Notification 매핑
+Layer 4 (StateMachine): #1 전이 규칙, #12 역할/고용 판정, #17 좌석 좌표
+Layer 5 (Infra)      : #8 WebSocket 프로토콜, #9 Heartbeat
+Layer 6 (Client)     : #15 Snapshot resync, #16 Ingest 오류, #2 PixiJS, #11 말풍선, #13 활성 작업
 ```
 
 하위 레이어가 상위 레이어의 전제 조건이므로 Layer 0부터 순차 진행한다.
+
+> **핵심 인사이트**: #3(의미적 이벤트 추출)이 #1(상태 머신)의 **근본 원인**이다.
+> normalizer가 `task_created`, `task_completed` 등을 생성하지 않으면,
+> 상태 머신에 아무리 전이 규칙을 추가해도 트리거될 이벤트 자체가 없다.
+> 따라서 Layer 3(Normalizer)을 Layer 4(StateMachine)보다 먼저 해결한다.
 
 ---
 
@@ -332,28 +350,87 @@ useEffect(() => { connect(WS_URL); }, [connect]);
 
 ---
 
-## Step 4: 상태 머신 & Normalizer 로직 보강 (C-02, C-07, H-02, H-03, H-04)
+## Step 4: Normalizer — 의미적 이벤트 추출 (#3, #14, #25)
 
-### 4-A. Normalizer에 `Notification` 매핑 추가 (`C-07`)
+> 이 단계는 상태 머신(Step 5)이 동작하기 위한 **필수 전제 조건**이다.
+> normalizer가 hook 원본에서 `task_created`, `task_completed` 등의 이벤트를 생성하지 않으면, 상태 머신 전이의 대부분이 트리거될 수 없다.
 
 **파일**: `apps/backend/src/services/normalizer.ts`
 
+### 4-A. Semantic Event Extraction 구현 (#3)
+
+`event-schema.md §5.2`의 규칙을 구현한다:
+
 ```typescript
-// 추가할 매핑:
-else if (rawEventName === "Notification") type = "agent_blocked";
-// Notification의 level이 error이면 severity를 "error"로 설정
+function deriveSemanticType(
+  rawEventName: string,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  error: unknown
+): NormalizedEvent["type"] {
+  // 1순위: SubagentStart/Stop — 확정 이벤트
+  if (rawEventName === "SubagentStart") return "agent_started";
+  if (rawEventName === "SubagentStop") return "agent_stopped";
+  if (rawEventName === "Stop") return "agent_stopped";
+
+  // 2순위: Notification — agent_blocked
+  if (rawEventName === "Notification") return "agent_blocked";
+
+  // 3순위: PreToolUse — tool_name 기반 의미 이벤트 추출
+  if (rawEventName === "PreToolUse") {
+    if (toolName === "Task" || toolName === "TaskCreate") return "task_created";
+    // 그 외 PreToolUse는 tool_started
+    return "tool_started";
+  }
+
+  // 4순위: PostToolUse — tool_name + error 기반
+  if (rawEventName === "PostToolUse") {
+    if (error) {
+      return "tool_failed";
+    }
+    // PostToolUse 성공 시 tool_input 분석으로 작업 이벤트 파생
+    if (toolName === "Task" || toolName === "TaskCreate") {
+      const status = toolInput?.status as string | undefined;
+      if (status === "completed") return "task_completed";
+      if (status === "failed") return "task_failed";
+      if (status === "started") return "task_started";
+      return "task_progress";
+    }
+    return "tool_succeeded";
+  }
+
+  return "schema_error";
+}
 ```
 
-`event-schema.md`에 `Notification`에 대한 명시적 매핑 타입이 없으므로, 문서에서 가장 의미적으로 가까운 `agent_blocked`로 매핑한다. `Notification`은 사용자에게 알림을 보내는 이벤트이므로, 에이전트가 외부 입력을 기다리는 상황을 나타낸다.
+**우선순위 체인**:
+- `SubagentStart/Stop` > `PreToolUse` 기반 추정 > `PostToolUse` 기반 확정 > `synthetic`
+- 동일 의미 이벤트가 PreToolUse(추정)와 PostToolUse(확정) 양쪽에서 발생 가능하므로, PostToolUse의 결과를 우선한다.
 
-추가로 `locale` 하드코딩(`"ko-KR"`) 제거 → settings-repo에서 `general.language` 또는 hook payload의 locale 값을 사용:
+**settings에서 동적으로 읽을 부분**:
+- Semantic extraction에서 tool_name → event_type 매핑을 향후 `advanced.transition_rules_editable`로 사용자 정의 가능하게 확장할 수 있으나, MVP에서는 코드 내 매핑 테이블로 충분하다.
+
+### 4-B. Notification 매핑 추가 (#14)
+
+위 `deriveSemanticType`에서 이미 처리됨:
+```typescript
+if (rawEventName === "Notification") return "agent_blocked";
+```
+`Notification`의 `level`이 `error`이면 severity를 `"error"`로 설정.
+
+### 4-C. locale 하드코딩 제거 (#25)
 
 ```typescript
 const settings = getSettings();
-const locale = String(input.locale ?? `${settings.general.language}-${settings.general.language.toUpperCase()}`);
+const locale = String(
+  input.locale ??
+  `${settings.general.language}-${settings.general.language.toUpperCase()}`
+);
 ```
 
-### 4-B. 상태 머신 전이 확장 (`C-02`, `H-02`, `H-03`, `H-04`)
+---
+
+## Step 5: 상태 머신 전이 확장 (#1, #12, #17)
 
 **파일**: `apps/backend/src/services/state-machine.ts`
 
@@ -378,34 +455,58 @@ type TransitionRule = {
 };
 
 const transitionTable: TransitionRule[] = [
-  // Agent lifecycle
+  // --- Agent lifecycle ---
   { from: "*",              event: "agent_started",     to: "idle" },
   { from: "*",              event: "agent_stopped",     to: "offline" },
 
-  // Task flow
+  // --- Task flow (from idle/seated states) ---
   { from: "idle",           event: "task_started",      to: "working" },
   { from: "working",        event: "task_completed",    to: "completed" },
   { from: "working",        event: "task_failed",       to: "failed" },
+  { from: "completed",      event: "task_started",      to: "working" },  // 큐 대기 작업
 
-  // tool_failed: fatal → failed, retryable → pending_input
+  // --- Task flow (from off-duty states → returning first) ---
+  { from: "roaming",        event: "task_started",      to: "returning" },
+  { from: "breakroom",      event: "task_started",      to: "returning" },
+  { from: "resting",        event: "task_started",      to: "returning" },
+
+  // --- tool_failed: fatal → failed, retryable → pending_input ---
   { from: "working", event: "tool_failed", to: "failed",
-    condition: (ctx) => ctx.event.severity === "error" },
+    condition: (ctx) => isFatalError(ctx.event) },
   { from: "working", event: "tool_failed", to: "pending_input" },
 
-  // Recovery
+  // --- Recovery ---
   { from: "failed",         event: "agent_unblocked",   to: "working" },
   { from: "pending_input",  event: "agent_unblocked",   to: "working" },
 
-  // Collaboration
+  // --- Collaboration (from idle) ---
   { from: "idle",           event: "manager_assign",    to: "handoff" },
-  { from: "working",        event: "manager_assign",    to: "working" },  // 작업중이면 유지
+  { from: "working",        event: "manager_assign",    to: "working" },  // 기본: 큐 적재
+
+  // --- Collaboration (from off-duty states → handoff to meeting spot) ---
+  { from: "roaming",        event: "manager_assign",    to: "handoff" },
+  { from: "breakroom",      event: "manager_assign",    to: "handoff" },
+  { from: "resting",        event: "manager_assign",    to: "handoff" },
+
+  // --- Meeting choreography ---
   { from: "handoff",        event: "meeting_started",   to: "meeting" },
   { from: "meeting",        event: "meeting_ended",     to: "returning" },
 
-  // Heartbeat — 상태 유지, last_event_ts만 갱신
-  { from: "*",              event: "heartbeat",         to: "idle",
-    condition: () => false },  // 매치되지 않도록 — 아래 fallthrough에서 현재 상태 유지
+  // --- Heartbeat — 상태 유지, last_event_ts만 갱신 ---
+  // (매칭되지 않으므로 fallthrough에서 현재 상태 유지)
 ];
+```
+
+**`isFatalError` 치명/재시도 분류** (`state-machine.md §4.4`):
+
+```typescript
+const FATAL_PATTERNS = ["permission denied", "not found", "ENOENT"];
+
+function isFatalError(event: NormalizedEvent): boolean {
+  const msg = String(event.payload?.error_message ?? "").toLowerCase();
+  return FATAL_PATTERNS.some((p) => msg.includes(p));
+  // TODO: 동일 도구 3회 연속 실패 → failed 승격 (failureCounter 필요)
+}
 ```
 
 **`nextStatus` 함수 리팩터링**:
@@ -418,7 +519,8 @@ export function nextStatus(ctx: TransitionContext): AgentStatus {
     if (rule.condition && !rule.condition(ctx)) continue;
     return rule.to;
   }
-  // 매칭 규칙 없으면 현재 상태 유지
+  // no-op 로깅: 매트릭스에 없는 (state, event) 조합
+  logger.debug({ state: ctx.current, event: ctx.event.type }, "transition_ignored");
   return ctx.current;
 }
 ```
@@ -473,13 +575,36 @@ export function resolvePostComplete(settings: Settings): AgentStatus {
 - 타이머 전이는 이벤트 전이와 분리하여, heartbeat 수신 시 또는 주기적 tick에서 호출한다.
 - `settings`를 함수 인자로 받아 모든 임계치가 동적으로 결정된다 (하드코딩 제거).
 
-### 4-C. Ingest 라우트에서 state-machine 호출 시그니처 업데이트
+### 5-B. 에이전트 역할/고용형태를 DB에서 판정 (#12)
+
+**파일**: `apps/backend/src/routes/agents.ts`
+
+현재 `roleFromAgentId()`, `employmentFromAgentId()` 함수를 삭제하고, `agents-repo`에서 DB 조회로 대체한다:
+
+```typescript
+// 변경 전: agent_id 문자열 패턴 추론
+// 변경 후: agents 테이블에서 조회
+const agentRow = getAgent(state.agent_id);
+if (!agentRow) {
+  // DB에 없는 에이전트 → 기본 계약직 (agents-tab-spec.md §6)
+  // 단, 오류 로그를 남겨 운영자가 인지하게 한다
+  logger.warn({ agent_id: state.agent_id }, "agent not found in agents table, defaulting to contractor");
+}
+return {
+  agent_id: state.agent_id,
+  display_name: agentRow?.display_name ?? state.agent_id.split("/").at(-1) ?? state.agent_id,
+  role: agentRow?.role ?? "unknown",
+  employment_type: agentRow?.employment_type ?? "contractor",
+  // ...
+};
+```
+
+### 5-C. Ingest 라우트에서 좌석 좌표 반영 (#17)
 
 **파일**: `apps/backend/src/routes/ingest.ts`
 
 `nextStatus` 호출부를 새 시그니처에 맞게 수정. `since`, `settings`를 전달하도록 변경.
-
-좌석 좌표는 `agents-repo`에서 읽어온다 (H-07 해소):
+좌석 좌표는 `agents-repo`에서 읽어온다:
 
 ```typescript
 const agentRow = getAgent(event.agent_id);
@@ -499,9 +624,9 @@ upsertState({
 
 ---
 
-## Step 5: WebSocket 게이트웨이 & Heartbeat (C-08, C-10)
+## Step 6: WebSocket 게이트웨이 & Heartbeat (#8, #9)
 
-### 5-A. WebSocket 메시지 핸들러 구현 (`C-08`)
+### 6-A. WebSocket 메시지 핸들러 구현 (#8)
 
 **파일**: `apps/backend/src/ws/gateway.ts`
 
@@ -565,7 +690,7 @@ export function broadcast(message: unknown, scope?: { workspace_id: string; term
 }
 ```
 
-### 5-B. Heartbeat 생성기 구현 (`C-10`)
+### 6-B. Heartbeat 생성기 구현 (#9)
 
 **파일 추가**: `apps/backend/src/services/heartbeat.ts`
 
@@ -618,9 +743,9 @@ function tick(): void {
 
 ---
 
-## Step 6: 클라이언트 재동기화 & 오류 가시화 (C-09, H-06)
+## Step 7: 클라이언트 재동기화 & 오류 가시화 (#15, #16)
 
-### 6-A. Snapshot 주기 재동기화 (`C-09`)
+### 7-A. Snapshot 주기 재동기화 (#15)
 
 **파일**: `apps/frontend/src/stores/ws-store.ts` 또는 `DashboardPage.tsx`
 
@@ -643,7 +768,7 @@ useEffect(() => {
 }, [/* dependencies */]);
 ```
 
-### 6-B. Ingest 라우트 오류 노출 (`H-06`)
+### 7-B. Ingest 라우트 오류 노출 (#16)
 
 **파일**: `apps/backend/src/routes/ingest.ts`
 
@@ -672,9 +797,88 @@ app.post("/ingest/hooks", async (request, reply) => {
 
 ---
 
-## Step 7: Event context 기본값 보정 & Hook 템플릿 완성 (H-05, M-03)
+## Step 8: 프론트엔드 기능 보완 (#2, #11, #13)
 
-### 7-A. Time Travel 기본 before/after 값 보정 (`H-05`)
+### 8-A. PixiJS 기반 Office 렌더러 (#2)
+
+**파일**: `apps/frontend/src/pages/OfficePage.tsx` (대규모 리팩터링)
+
+현재 HTML div + `requestAnimationFrame` 기반 렌더링을 PixiJS WebGL로 전환한다.
+
+**설계 방향**:
+- `pixi.js`가 이미 `package.json`에 설치되어 있으므로 추가 의존성 불필요.
+- OfficePage 내에 `<canvas>` ref를 두고, `useEffect`에서 PixiJS `Application`을 초기화한다.
+- 에이전트는 `Sprite` 또는 `Container`로 표현하고, `Ticker`를 이용해 이동 보간한다.
+- 이펙트(working paper, failed scream, zzz)를 PixiJS `Graphics`/`Text`로 구현한다.
+
+```typescript
+// 골격
+import { Application, Container, Sprite, Text, Ticker } from "pixi.js";
+
+function initOffice(canvas: HTMLCanvasElement): Application {
+  const app = new Application();
+  // await app.init({ canvas, resizeTo: canvas.parentElement });
+  // 에이전트 Container 생성, 좌석/미팅/탕비실 존 렌더링
+  return app;
+}
+```
+
+**이동 속도**: `state-machine.md §7`의 120 px/s를 캔버스 해상도에 맞게 적용. 정규화 좌표(0-100)를 실제 캔버스 픽셀로 변환하는 함수를 사용한다.
+
+**좌석 좌표**: OfficePage.tsx에 하드코딩된 `seatPoints` 배열을 제거하고, 서버 스냅샷(`agents[].home_position`)에서 읽는다. 스냅샷에 좌석이 없으면(마이그레이션 전 데이터) settings의 `office_layout.seat_positions`에서 참조한다.
+
+**트레이드오프**: PixiJS 전환은 가장 큰 작업량을 요구한다. 그러나 문서에 명시된 기술 스택이고 성능 목표(20 agents, 30 FPS)를 달성하기 위해 필요하다. 코드 품질 우선 원칙에 따라, 현재 div 기반 코드를 유지하면서 점진적으로 PixiJS로 마이그레이션하는 것도 가능하나, 이중 렌더링 코드를 유지하는 것은 기술 부채를 늘리므로 한 번에 전환하는 것을 권장한다.
+
+### 8-B. 말풍선(Speech Bubble) 구현 (#11)
+
+**파일**: PixiJS 전환 후 OfficeRenderer 내에서 구현
+
+```typescript
+// 에이전트 Container 내에 speechBubble Text 추가
+// settings.office_layout.speech_bubble_enabled가 false면 비표시
+function createSpeechBubble(text: string, settings: Settings): Container | null {
+  if (!settings.office_layout.speech_bubble_enabled) return null;
+  // 말풍선 배경(RoundedRect) + 텍스트
+}
+```
+
+말풍선 내용은 최근 이벤트의 `payload.summary` 또는 `payload.tool_name`에서 가져온다.
+표시 조건: 에이전트가 `working` 또는 `meeting` 상태일 때만 표시.
+
+### 8-C. 활성 작업 목록 구현 (#13)
+
+**파일**: `apps/frontend/src/pages/DashboardPage.tsx`
+
+스냅샷의 `tasks` 배열(Step 2-B에서 실제 데이터를 채우게 됨)을 이용하여 활성 작업 위젯을 렌더링한다.
+
+```tsx
+<article className="panel">
+  <h3>{t("dashboard_active_tasks")}</h3>
+  <table>
+    <thead><tr>
+      <th>Task ID</th><th>{t("common_assignee")}</th><th>{t("common_elapsed")}</th><th>{t("common_status")}</th>
+    </tr></thead>
+    <tbody>
+      {tasks.filter(t => t.status === "started").map(task => (
+        <tr key={task.id}>
+          <td>{task.id}</td>
+          <td>{task.assignee_id}</td>
+          <td>{elapsedSince(task.created_at)}</td>
+          <td>{task.status}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</article>
+```
+
+i18n 키 추가: `dashboard_active_tasks`, `common_assignee`, `common_elapsed`.
+
+---
+
+## Step 9: 기본값 보정 & Hook 템플릿 완성 (#18, #19, #20, #24)
+
+### 9-A. Time Travel 기본 before/after 값 보정 (#20)
 
 **파일**: `apps/backend/src/routes/snapshot.ts:65-66`
 
@@ -683,7 +887,7 @@ const beforeLimit = Number(query.before ?? 10);  // 8 → 10
 const afterLimit = Number(query.after ?? 10);     // 8 → 10
 ```
 
-### 7-B. Hook 템플릿 완성 (`M-03`)
+### 9-B. Hook 템플릿 완성 (#18)
 
 **파일**: `apps/backend/src/routes/integration.ts`
 
@@ -708,13 +912,15 @@ const afterLimit = Number(query.after ?? 10);     // 8 → 10
 
 | 순서 | Step | 해소하는 이슈 | 주요 변경 파일 |
 |---|---|---|---|
-| 1 | Schema 정합성 | C-01, C-03 | `shared-schema/src/settings.ts`, `shared-schema/src/state.ts` |
-| 2 | Storage 계층 | C-06, H-07 | `storage/db.ts`, 신규 `agents-repo.ts`, `tasks-repo.ts`, `sessions-repo.ts` |
-| 3 | Settings API & URL | C-04, C-05, H-01 | 신규 `routes/settings.ts`, `storage/settings-repo.ts`, `constants.ts`, `api.ts`, `App.tsx` |
-| 4 | 상태 머신 & Normalizer | C-02, C-07, H-02, H-03, H-04, M-05 | `state-machine.ts`, `normalizer.ts`, `ingest.ts` |
-| 5 | WebSocket & Heartbeat | C-08, C-10 | `ws/gateway.ts`, 신규 `heartbeat.ts`, `index.ts` |
-| 6 | 클라이언트 동기화 & 오류 | C-09, H-06 | `DashboardPage.tsx`, `ingest.ts` |
-| 7 | 기본값 보정 & 템플릿 | H-05, M-03 | `snapshot.ts`, `integration.ts` |
+| 1 | Schema 정합성 | #5, #7 | `shared-schema/src/settings.ts`, `shared-schema/src/state.ts` |
+| 2 | Storage 계층 | #4, #17 | `storage/db.ts`, 신규 `agents-repo.ts`, `tasks-repo.ts`, `sessions-repo.ts` |
+| 3 | Settings API & URL | #6, #10 | 신규 `routes/settings.ts`, `storage/settings-repo.ts`, `constants.ts`, `api.ts`, `App.tsx` |
+| 4 | Normalizer 의미적 추출 | #3, #14, #25 | `normalizer.ts` |
+| 5 | 상태 머신 & 에이전트 판정 | #1, #12, #17 | `state-machine.ts`, `routes/agents.ts`, `ingest.ts` |
+| 6 | WebSocket & Heartbeat | #8, #9 | `ws/gateway.ts`, 신규 `heartbeat.ts`, `index.ts` |
+| 7 | 클라이언트 동기화 & 오류 | #15, #16 | `DashboardPage.tsx`, `ingest.ts` |
+| 8 | 프론트엔드 기능 보완 | #2, #11, #13 | `OfficePage.tsx`, `DashboardPage.tsx` |
+| 9 | 기본값 보정 & 템플릿 | #18, #19, #20, #24 | `snapshot.ts`, `integration.ts` |
 
 ---
 
