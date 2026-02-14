@@ -8,6 +8,8 @@ import {
   listScopes
 } from "../storage/events-repo";
 import { listStatesScoped } from "../storage/state-repo";
+import { listActiveTasks } from "../storage/tasks-repo";
+import { listAllSessions } from "../storage/sessions-repo";
 import { config } from "../config";
 
 function scopeFilter(query: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): {
@@ -29,11 +31,10 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
 
     return {
       agents: listStatesScoped(filter),
-      tasks: [],
-      sessions: [],
-      settings: {},
+      tasks: listActiveTasks(),
+      sessions: listAllSessions(),
       recent_events: listEventsScoped(100, filter),
-      server_ts: new Date().toISOString()
+      server_ts: new Date().toISOString(),
     };
   });
 
@@ -62,8 +63,8 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
   app.get("/api/events/:eventId/context", async (request, reply) => {
     const params = request.params as { eventId: string };
     const query = request.query as { before?: string; after?: string };
-    const beforeLimit = Number(query.before ?? 8);
-    const afterLimit = Number(query.after ?? 8);
+    const beforeLimit = Number(query.before ?? 10);
+    const afterLimit = Number(query.after ?? 10);
 
     const pivot = getEventById(decodeURIComponent(params.eventId));
     if (!pivot) {
@@ -71,8 +72,8 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
       return { ok: false, message: "event not found" };
     }
 
-    const before = listEventsBefore(pivot.ts, Number.isFinite(beforeLimit) ? beforeLimit : 8);
-    const after = listEventsAfter(pivot.ts, Number.isFinite(afterLimit) ? afterLimit : 8);
+    const before = listEventsBefore(pivot.ts, Number.isFinite(beforeLimit) ? beforeLimit : 10);
+    const after = listEventsAfter(pivot.ts, Number.isFinite(afterLimit) ? afterLimit : 10);
 
     return {
       pivot,
