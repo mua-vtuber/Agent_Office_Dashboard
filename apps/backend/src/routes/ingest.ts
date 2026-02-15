@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import type { AgentStatus } from "@aod/shared-schema";
 import { normalizeHookEvent } from "../services/normalizer";
-import { insertEvent } from "../storage/events-repo";
+import { eventExists, insertEvent } from "../storage/events-repo";
 import { getState, upsertState } from "../storage/state-repo";
-import { getAgent } from "../storage/agents-repo";
+import { getAgent, upsertAgent } from "../storage/agents-repo";
 import { nextStatus, getAppSettings } from "../services/state-machine";
 import { broadcast } from "../ws/gateway";
 
@@ -13,7 +13,31 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
 
     try {
       const event = normalizeHookEvent(body);
+
+      // Dedup: return success if already processed
+      if (eventExists(event.id)) {
+        return reply.code(200).send({ ok: true, event_id: event.id, deduplicated: true });
+      }
+
       insertEvent(event);
+
+      // Auto-register unknown agents
+      if (!getAgent(event.agent_id)) {
+        const isLeader = event.agent_id.endsWith("/leader");
+        const shortName = event.agent_id.split("/").at(-1) ?? event.agent_id;
+        upsertAgent({
+          agent_id: event.agent_id,
+          display_name: shortName,
+          role: isLeader ? "manager" : "worker",
+          employment_type: "contractor",
+          is_persisted: false,
+          source: "runtime_agent",
+          avatar_id: null,
+          seat_x: 0,
+          seat_y: 0,
+          active: true,
+        });
+      }
 
       const currentRow = getState(event.agent_id);
       const current: AgentStatus = (currentRow?.status as AgentStatus | undefined) ?? "idle";
