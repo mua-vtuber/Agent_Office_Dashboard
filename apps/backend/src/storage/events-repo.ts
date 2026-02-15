@@ -1,6 +1,7 @@
 import { db } from "./db";
 import type { NormalizedEvent } from "@aod/shared-schema";
-import { nextStatus } from "../services/state-machine";
+import type { AgentStatus } from "@aod/shared-schema";
+import { nextStatusSimple } from "../services/state-machine";
 
 const insert = db.prepare(`
 INSERT OR REPLACE INTO events (
@@ -130,9 +131,9 @@ export function computeAgentStatusAtTs(agentId: string, ts: string): {
     .prepare("SELECT * FROM events WHERE agent_id = ? AND ts <= ? ORDER BY ts ASC")
     .all(agentId, ts) as EventRow[];
 
-  let status: string | undefined;
+  let status: AgentStatus | undefined;
   for (const row of rows) {
-    status = nextStatus(status, {
+    status = nextStatusSimple(status, {
       id: row.id,
       version: "1.1",
       ts: row.ts,
