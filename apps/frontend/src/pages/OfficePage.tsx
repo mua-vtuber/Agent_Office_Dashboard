@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 const CW = 800;
 const CH = 560;
 const AGENT_R = 10;
-const MOVE_SPEED = 120; // px/s (state-machine.md §7)
+const DEFAULT_MOVE_SPEED = 120;
 
 /* ---------- Types ---------- */
 
@@ -234,6 +234,7 @@ export function OfficePage(): JSX.Element {
   const appRef = useRef<Application | null>(null);
   const layerRef = useRef<Container | null>(null);
   const nodesRef = useRef<Map<string, AgentNode>>(new Map());
+  const moveSpeedRef = useRef(DEFAULT_MOVE_SPEED);
   const [pixiReady, setPixiReady] = useState(false);
 
   const agentsMap = useAgentStore((s) => s.agents);
@@ -247,7 +248,7 @@ export function OfficePage(): JSX.Element {
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
   const selectedRun = searchParams.get("run_id") ?? "";
 
-  /* Fetch snapshot */
+  /* Fetch snapshot + settings */
   useEffect(() => {
     let mounted = true;
     void (async () => {
@@ -257,9 +258,20 @@ export function OfficePage(): JSX.Element {
         if (selectedTerminal) q.set("terminal_session_id", selectedTerminal);
         if (selectedRun) q.set("run_id", selectedRun);
         const suffix = q.toString() ? `?${q.toString()}` : "";
-        const res = await fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`);
-        const json = (await res.json()) as { agents?: AgentView[] };
+
+        const [snapshotRes, settingsRes] = await Promise.all([
+          fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
+          fetch(`${BACKEND_ORIGIN}/api/settings/app`),
+        ]);
+
+        const json = (await snapshotRes.json()) as { agents?: AgentView[] };
         if (mounted && Array.isArray(json.agents)) setManyAgents(json.agents);
+
+        if (settingsRes.ok) {
+          const sJson = (await settingsRes.json()) as { value?: { operations?: { move_speed_px_per_sec?: number } } };
+          const speed = sJson.value?.operations?.move_speed_px_per_sec;
+          if (typeof speed === "number" && speed >= 30) moveSpeedRef.current = speed;
+        }
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "failed to load snapshot");
       }
@@ -346,7 +358,7 @@ export function OfficePage(): JSX.Element {
             n.cur.x = n.tgt.x;
             n.cur.y = n.tgt.y;
           } else {
-            const step = Math.min(1, (MOVE_SPEED * dt) / dist);
+            const step = Math.min(1, (moveSpeedRef.current * dt) / dist);
             n.cur.x += dx * step;
             n.cur.y += dy * step;
           }
