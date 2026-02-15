@@ -83,7 +83,11 @@ const resources = {
       office_focus_empty_recent: "최근 이벤트가 없습니다.",
       dashboard_before: "Before",
       dashboard_pivot: "Pivot",
-      dashboard_after: "After"
+      dashboard_after: "After",
+      dashboard_active_tasks: "활성 작업",
+      dashboard_tasks_empty: "활성 작업이 없습니다.",
+      common_assignee: "담당자",
+      common_elapsed: "경과 시간"
     }
   },
   en: {
@@ -167,7 +171,11 @@ const resources = {
       office_focus_empty_recent: "No recent events.",
       dashboard_before: "Before",
       dashboard_pivot: "Pivot",
-      dashboard_after: "After"
+      dashboard_after: "After",
+      dashboard_active_tasks: "Active Tasks",
+      dashboard_tasks_empty: "No active tasks.",
+      common_assignee: "Assignee",
+      common_elapsed: "Elapsed"
     }
   }
 };

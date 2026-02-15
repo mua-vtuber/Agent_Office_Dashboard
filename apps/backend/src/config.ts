@@ -4,5 +4,7 @@ export const config = {
   dbPath: process.env.DB_PATH ?? "data/dashboard.db",
   defaultWorkspace: process.env.DEFAULT_WORKSPACE ?? "default-workspace",
   defaultTerminalSession: process.env.DEFAULT_TERMINAL_SESSION ?? "default-terminal",
-  defaultRunId: process.env.DEFAULT_RUN_ID ?? "default-run"
+  defaultRunId: process.env.DEFAULT_RUN_ID ?? "default-run",
+  authToken: process.env.DASHBOARD_TOKEN ?? "",
+  corsOrigin: process.env.CORS_ORIGIN ?? "",
 };

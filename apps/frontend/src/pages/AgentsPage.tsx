@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
+import { authFetch } from "../lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -58,8 +59,8 @@ export function AgentsPage(): JSX.Element {
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
         const [agentsRes, sessionsRes] = await Promise.all([
-          fetch(`${BACKEND_ORIGIN}/api/agents${suffix}`),
-          fetch(`${BACKEND_ORIGIN}/api/sessions`)
+          authFetch(`${BACKEND_ORIGIN}/api/agents${suffix}`),
+          authFetch(`${BACKEND_ORIGIN}/api/sessions`)
         ]);
         const json = (await agentsRes.json()) as { agents?: AgentRow[] };
         const sessionsJson = (await sessionsRes.json()) as { scopes?: Scope[] };
@@ -96,7 +97,7 @@ export function AgentsPage(): JSX.Element {
         if (selectedRun) query.set("run_id", selectedRun);
         const suffix = query.toString() ? `?${query.toString()}` : "";
         const encoded = encodeURIComponent(selectedId);
-        const res = await fetch(`${BACKEND_ORIGIN}/api/agents/${encoded}${suffix}`);
+        const res = await authFetch(`${BACKEND_ORIGIN}/api/agents/${encoded}${suffix}`);
         const json = (await res.json()) as { agent?: AgentDetail };
         if (mounted) setDetail(json.agent ?? null);
       } catch (e) {
