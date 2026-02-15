@@ -69,6 +69,7 @@ export const settingsSchema = z.object({
     stale_agent_seconds: z.number().int().positive(),
     failure_alert_enabled: z.boolean(),
     snapshot_sync_interval_sec: z.number().int().min(5).max(300),
+    move_speed_px_per_sec: z.number().int().min(30).max(300),
   }),
 
   /** §2.5 Connection */
@@ -131,6 +132,7 @@ export const defaultSettings: Settings = {
     stale_agent_seconds: 30,
     failure_alert_enabled: true,
     snapshot_sync_interval_sec: 30,
+    move_speed_px_per_sec: 120,
   },
   connection: {
     api_base_url: "http://127.0.0.1:4800",
