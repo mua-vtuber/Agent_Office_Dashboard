@@ -5,6 +5,7 @@ import { registerIngestRoutes } from "./routes/ingest";
 import { registerSnapshotRoutes } from "./routes/snapshot";
 import { registerAgentRoutes } from "./routes/agents";
 import { registerIntegrationRoutes } from "./routes/integration";
+import { registerSettingsRoutes } from "./routes/settings";
 import { wss } from "./ws/gateway";
 
 async function start(): Promise<void> {
@@ -12,13 +13,14 @@ async function start(): Promise<void> {
 
   await app.register(cors, {
     origin: true,
-    methods: ["GET", "POST", "PUT", "OPTIONS"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   });
 
   await registerIngestRoutes(app);
   await registerSnapshotRoutes(app);
   await registerAgentRoutes(app);
   await registerIntegrationRoutes(app);
+  await registerSettingsRoutes(app);
 
   app.get("/api/health", async () => ({ ok: true }));
 
