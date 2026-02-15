@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','inactive')),
   PRIMARY KEY (workspace_id, terminal_session_id, run_id)
 );
+
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value_json TEXT NOT NULL
+);
 `);
 
 // --- Migration v1: extend state_current with home_position, since, context ---

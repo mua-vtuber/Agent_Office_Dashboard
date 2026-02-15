@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import fs from "node:fs";
 import path from "node:path";
 import { latestHookEventTs } from "../storage/events-repo";
+import { config } from "../config";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
@@ -43,25 +44,22 @@ function checkStatus(root: string): IntegrationStatus {
   };
 }
 
-const hookTemplate = `{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "command": "curl -s -m 2 -X POST http://127.0.0.1:4800/ingest/hooks -H 'Content-Type: application/json' -d \\"$(cat)\\" || true"
-      }
-    ],
-    "PostToolUse": [
-      {
-        "command": "curl -s -m 2 -X POST http://127.0.0.1:4800/ingest/hooks -H 'Content-Type: application/json' -d \\"$(cat)\\" || true"
-      }
-    ],
-    "SubagentStart": [
-      {
-        "command": "curl -s -m 2 -X POST http://127.0.0.1:4800/ingest/hooks -H 'Content-Type: application/json' -d \\"$(cat)\\" || true"
-      }
-    ]
-  }
-}`;
+function hookTemplate(): string {
+  const origin = `http://127.0.0.1:${config.port}`;
+  const curlCmd = (hook: string) =>
+    `curl -s -m 2 -X POST ${origin}/ingest/hooks -H 'Content-Type: application/json' -d \\"$(cat)\\" || true`;
+  return JSON.stringify(
+    {
+      hooks: {
+        PreToolUse: [{ command: curlCmd("PreToolUse") }],
+        PostToolUse: [{ command: curlCmd("PostToolUse") }],
+        SubagentStart: [{ command: curlCmd("SubagentStart") }],
+      },
+    },
+    null,
+    2,
+  );
+}
 
 export async function registerIntegrationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/integration/status", async () => {
@@ -80,7 +78,7 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
         ok: true,
         mode: "guide",
         target_file: targetFile,
-        template: hookTemplate,
+        template: hookTemplate(),
         next_step: "Paste this template into .claude/settings.local.json then restart Claude Code session."
       };
     }
@@ -105,7 +103,7 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
       };
     }
 
-    fs.writeFileSync(targetFile, hookTemplate, "utf8");
+    fs.writeFileSync(targetFile, hookTemplate(), "utf8");
     return {
       ok: true,
       mode: "write",
