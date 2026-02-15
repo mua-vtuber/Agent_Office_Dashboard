@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
 import { BACKEND_ORIGIN } from "../lib/constants";
+import { authFetch } from "../lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -114,11 +115,11 @@ export function DashboardPage(): JSX.Element {
         const suffix = buildSuffix();
 
         const [eventsRes, snapshotRes, sessionsRes, integrationRes, settingsRes] = await Promise.all([
-          fetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
-          fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          fetch(`${BACKEND_ORIGIN}/api/sessions`),
-          fetch(`${BACKEND_ORIGIN}/api/integration/status`),
-          fetch(`${BACKEND_ORIGIN}/api/settings/app`),
+          authFetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
+          authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
+          authFetch(`${BACKEND_ORIGIN}/api/sessions`),
+          authFetch(`${BACKEND_ORIGIN}/api/integration/status`),
+          authFetch(`${BACKEND_ORIGIN}/api/settings/app`),
         ]);
 
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
@@ -169,8 +170,8 @@ export function DashboardPage(): JSX.Element {
       try {
         const suffix = buildSuffix();
         const [snapshotRes, eventsRes] = await Promise.all([
-          fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          fetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
+          authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
+          authFetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
         ]);
         const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
@@ -201,7 +202,7 @@ export function DashboardPage(): JSX.Element {
     void (async () => {
       try {
         const encoded = encodeURIComponent(selectedEventId);
-        const res = await fetch(`${BACKEND_ORIGIN}/api/events/${encoded}/context?before=8&after=8`);
+        const res = await authFetch(`${BACKEND_ORIGIN}/api/events/${encoded}/context?before=8&after=8`);
         const json = (await res.json()) as EventContext;
         if (mounted) setContext(json);
       } catch (e) {

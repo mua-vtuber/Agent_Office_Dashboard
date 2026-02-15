@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
+import { authFetch } from "../lib/api";
 import { useUiSettingsStore } from "../stores/ui-settings-store";
 import { useTranslation } from "react-i18next";
 
@@ -33,7 +34,7 @@ export function SettingsPage(): JSX.Element {
 
   const refreshStatus = async (): Promise<void> => {
     try {
-      const res = await fetch(`${BACKEND_ORIGIN}/api/integration/status`);
+      const res = await authFetch(`${BACKEND_ORIGIN}/api/integration/status`);
       const json = (await res.json()) as IntegrationStatus;
       setStatus(json);
     } catch (e) {
@@ -48,7 +49,7 @@ export function SettingsPage(): JSX.Element {
   const installHooks = async (mode: "guide" | "write"): Promise<void> => {
     setInstallResult(null);
     try {
-      const res = await fetch(`${BACKEND_ORIGIN}/api/integration/hooks/install`, {
+      const res = await authFetch(`${BACKEND_ORIGIN}/api/integration/hooks/install`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode })

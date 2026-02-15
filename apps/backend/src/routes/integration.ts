@@ -46,17 +46,17 @@ function checkStatus(root: string): IntegrationStatus {
 
 function hookTemplate(): string {
   const origin = `http://127.0.0.1:${config.port}`;
-  const curlCmd = (hook: string) =>
-    `curl -s -m 2 -X POST ${origin}/ingest/hooks -H 'Content-Type: application/json' -d \\"$(cat)\\" || true`;
+  const curlCmd = () =>
+    `curl -s -m 2 -X POST ${origin}/ingest/hooks -H 'Content-Type: application/json' -H 'Authorization: Bearer $DASHBOARD_TOKEN' -d \\"$(cat)\\" || true`;
   return JSON.stringify(
     {
       hooks: {
-        PreToolUse: [{ command: curlCmd("PreToolUse") }],
-        PostToolUse: [{ command: curlCmd("PostToolUse") }],
-        SubagentStart: [{ command: curlCmd("SubagentStart") }],
-        SubagentStop: [{ command: curlCmd("SubagentStop") }],
-        Stop: [{ command: curlCmd("Stop") }],
-        Notification: [{ command: curlCmd("Notification") }],
+        PreToolUse: [{ command: curlCmd() }],
+        PostToolUse: [{ command: curlCmd() }],
+        SubagentStart: [{ command: curlCmd() }],
+        SubagentStop: [{ command: curlCmd() }],
+        Stop: [{ command: curlCmd() }],
+        Notification: [{ command: curlCmd() }],
       },
     },
     null,
