@@ -8,6 +8,7 @@ import { useWsStore } from "./stores/ws-store";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";
 import { useUiSettingsStore } from "./stores/ui-settings-store";
 import { useTranslation } from "react-i18next";
+import { WS_URL } from "./lib/constants";
 
 export default function App(): JSX.Element {
   const connect = useWsStore((s) => s.connect);
@@ -24,7 +25,7 @@ export default function App(): JSX.Element {
   ];
 
   useEffect(() => {
-    connect("ws://127.0.0.1:4800/ws");
+    connect(WS_URL);
   }, [connect]);
 
   useEffect(() => {

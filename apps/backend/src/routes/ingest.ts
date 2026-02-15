@@ -1,24 +1,56 @@
 import type { FastifyInstance } from "fastify";
+import type { AgentStatus } from "@aod/shared-schema";
 import { normalizeHookEvent } from "../services/normalizer";
-import { insertEvent } from "../storage/events-repo";
-import { listStates, upsertState } from "../storage/state-repo";
-import { nextStatus } from "../services/state-machine";
+import { eventExists, insertEvent } from "../storage/events-repo";
+import { getState, upsertState } from "../storage/state-repo";
+import { getAgent, upsertAgent } from "../storage/agents-repo";
+import { nextStatus, getAppSettings } from "../services/state-machine";
 import { broadcast } from "../ws/gateway";
 
 export async function registerIngestRoutes(app: FastifyInstance): Promise<void> {
   app.post("/ingest/hooks", async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
 
-    // respond quickly to avoid blocking hook caller
-    reply.code(200).send({ ok: true });
-
     try {
       const event = normalizeHookEvent(body);
+
+      // Dedup: return success if already processed
+      if (eventExists(event.id)) {
+        return reply.code(200).send({ ok: true, event_id: event.id, deduplicated: true });
+      }
+
       insertEvent(event);
 
-      const stateRows = listStates() as Array<{ agent_id: string; status: string }>;
-      const current = stateRows.find((row) => row.agent_id === event.agent_id)?.status;
-      const next = nextStatus(current, event);
+      // Auto-register unknown agents
+      if (!getAgent(event.agent_id)) {
+        const isLeader = event.agent_id.endsWith("/leader");
+        const shortName = event.agent_id.split("/").at(-1) ?? event.agent_id;
+        upsertAgent({
+          agent_id: event.agent_id,
+          display_name: shortName,
+          role: isLeader ? "manager" : "worker",
+          employment_type: "contractor",
+          is_persisted: false,
+          source: "runtime_agent",
+          avatar_id: null,
+          seat_x: 0,
+          seat_y: 0,
+          active: true,
+        });
+      }
+
+      const currentRow = getState(event.agent_id);
+      const current: AgentStatus = (currentRow?.status as AgentStatus | undefined) ?? "idle";
+      const prevSince = currentRow?.since || event.ts;
+      const settings = getAppSettings();
+
+      const next = nextStatus({ current, event, since: prevSince, settings });
+
+      const agentRow = getAgent(event.agent_id);
+      const seatX = agentRow?.seat_x ?? 0;
+      const seatY = agentRow?.seat_y ?? 0;
+
+      const since = next !== current ? event.ts : prevSince;
 
       upsertState({
         agent_id: event.agent_id,
@@ -26,10 +58,17 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
         terminal_session_id: event.terminal_session_id,
         run_id: event.run_id,
         status: next,
-        position_x: 0,
-        position_y: 0,
+        position_x: currentRow?.position_x ?? seatX,
+        position_y: currentRow?.position_y ?? seatY,
+        home_position_x: seatX,
+        home_position_y: seatY,
         facing: "right",
-        last_event_ts: event.ts
+        since,
+        context_json: JSON.stringify({
+          task_id: event.task_id ?? null,
+          peer_agent_id: event.target_agent_id ?? null,
+        }),
+        last_event_ts: event.ts,
       });
 
       broadcast({ type: "event", data: event });
@@ -37,18 +76,27 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
         type: "state_update",
         data: {
           agent_id: event.agent_id,
-          prev_status: current ?? "idle",
+          prev_status: current,
           next_status: next,
-          position: { x: 0, y: 0 },
+          position: { x: currentRow?.position_x ?? seatX, y: currentRow?.position_y ?? seatY },
+          home_position: { x: seatX, y: seatY },
           target_position: null,
           facing: "right",
-          context: { task_id: event.task_id ?? undefined },
+          since,
+          context: {
+            task_id: event.task_id ?? null,
+            peer_agent_id: event.target_agent_id ?? null,
+          },
           triggered_by_event_id: event.id,
-          ts: event.ts
-        }
+          ts: event.ts,
+        },
       });
+
+      return reply.code(200).send({ ok: true, event_id: event.id });
     } catch (error) {
-      app.log.error({ error }, "failed to process ingest event");
+      const message = error instanceof Error ? error.message : "unknown error";
+      app.log.error({ error }, "ingest processing failed");
+      return reply.code(422).send({ ok: false, error: message });
     }
   });
 }
