@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
 import { BACKEND_ORIGIN } from "../lib/constants";
@@ -17,6 +17,16 @@ type EventRow = {
   type: string;
   agent_id: string;
   task_id: string | null;
+};
+
+type TaskRow = {
+  id: string;
+  title: string;
+  status: string;
+  assignee_id: string | null;
+  manager_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type AgentSnapshot = {
@@ -46,11 +56,22 @@ type Scope = {
   last_event_ts: string;
 };
 
+const DEFAULT_SYNC_INTERVAL_SEC = 30;
+
 function statusClass(status: string): string {
   if (status === "failed") return "critical";
   if (status === "pending_input") return "warn";
   if (status === "working" || status === "meeting") return "good";
   return "neutral";
+}
+
+function elapsedSince(isoTs: string): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(isoTs).getTime()) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
 }
 
 function eventSummary(e: EventRow): string {
@@ -69,34 +90,49 @@ export function DashboardPage(): JSX.Element {
   const [error, setError] = useState<string>("");
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
   const [scopes, setScopes] = useState<Scope[]>([]);
+  const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [context, setContext] = useState<EventContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
+  const syncIntervalRef = useRef(DEFAULT_SYNC_INTERVAL_SEC);
   const selectedWorkspace = searchParams.get("workspace_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
   const selectedRun = searchParams.get("run_id") ?? "";
+
+  const buildSuffix = useCallback((): string => {
+    const query = new URLSearchParams();
+    if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
+    if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
+    if (selectedRun) query.set("run_id", selectedRun);
+    return query.toString() ? `?${query.toString()}` : "";
+  }, [selectedWorkspace, selectedTerminal, selectedRun]);
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
-        const query = new URLSearchParams();
-        if (selectedWorkspace) query.set("workspace_id", selectedWorkspace);
-        if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
-        if (selectedRun) query.set("run_id", selectedRun);
-        const suffix = query.toString() ? `?${query.toString()}` : "";
+        const suffix = buildSuffix();
 
-        const [eventsRes, snapshotRes, sessionsRes, integrationRes] = await Promise.all([
+        const [eventsRes, snapshotRes, sessionsRes, integrationRes, settingsRes] = await Promise.all([
           fetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
           fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
           fetch(`${BACKEND_ORIGIN}/api/sessions`),
-          fetch(`${BACKEND_ORIGIN}/api/integration/status`)
+          fetch(`${BACKEND_ORIGIN}/api/integration/status`),
+          fetch(`${BACKEND_ORIGIN}/api/settings/app`),
         ]);
 
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
-        const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[] };
+        const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
         const sessionsJson = (await sessionsRes.json()) as { scopes?: Scope[] };
         const integrationJson = (await integrationRes.json()) as IntegrationStatus;
+
+        if (settingsRes.ok) {
+          const settingsJson = (await settingsRes.json()) as { value?: { operations?: { snapshot_sync_interval_sec?: number } } };
+          const interval = settingsJson.value?.operations?.snapshot_sync_interval_sec;
+          if (typeof interval === "number" && interval >= 5) {
+            syncIntervalRef.current = interval;
+          }
+        }
 
         if (!mounted) return;
 
@@ -114,6 +150,7 @@ export function DashboardPage(): JSX.Element {
             }))
           );
         }
+        if (Array.isArray(snapshotJson.tasks)) setTasks(snapshotJson.tasks);
         if (Array.isArray(sessionsJson.scopes)) setScopes(sessionsJson.scopes);
         setIntegration(integrationJson);
       } catch (e) {
@@ -124,7 +161,38 @@ export function DashboardPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [setAllEvents, setManyAgents, selectedWorkspace, selectedTerminal, selectedRun]);
+  }, [setAllEvents, setManyAgents, buildSuffix]);
+
+  // Periodic snapshot resync (#15)
+  useEffect(() => {
+    const intervalId = window.setInterval(async () => {
+      try {
+        const suffix = buildSuffix();
+        const [snapshotRes, eventsRes] = await Promise.all([
+          fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
+          fetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
+        ]);
+        const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
+        const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
+
+        if (Array.isArray(snapshotJson.agents)) {
+          setManyAgents(
+            snapshotJson.agents.map((a) => ({
+              agent_id: a.agent_id,
+              status: a.status,
+              last_event_ts: a.last_event_ts ?? new Date().toISOString()
+            }))
+          );
+        }
+        if (Array.isArray(snapshotJson.tasks)) setTasks(snapshotJson.tasks);
+        if (Array.isArray(eventsJson.events)) setAllEvents(eventsJson.events);
+      } catch {
+        // silent — WS and next tick will retry
+      }
+    }, syncIntervalRef.current * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [setManyAgents, setAllEvents, buildSuffix]);
 
   useEffect(() => {
     if (!selectedEventId) return;
@@ -261,6 +329,34 @@ export function DashboardPage(): JSX.Element {
           ))
         )}
       </div>
+
+      <h3>{t("dashboard_active_tasks")}</h3>
+      {tasks.filter((tk) => tk.status === "started" || tk.status === "created").length === 0 ? (
+        <p>{t("dashboard_tasks_empty")}</p>
+      ) : (
+        <table className="tasks-table">
+          <thead>
+            <tr>
+              <th>Task ID</th>
+              <th>{t("common_assignee")}</th>
+              <th>{t("common_elapsed")}</th>
+              <th>{t("common_status")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks
+              .filter((tk) => tk.status === "started" || tk.status === "created")
+              .map((task) => (
+                <tr key={task.id}>
+                  <td>{task.title || task.id}</td>
+                  <td>{task.assignee_id ?? "-"}</td>
+                  <td>{elapsedSince(task.created_at)}</td>
+                  <td><span className={`badge ${task.status === "started" ? "good" : "neutral"}`}>{task.status}</span></td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      )}
 
       <div className="split-layout">
         <article className="panel">
