@@ -6,7 +6,8 @@ import { registerSnapshotRoutes } from "./routes/snapshot";
 import { registerAgentRoutes } from "./routes/agents";
 import { registerIntegrationRoutes } from "./routes/integration";
 import { registerSettingsRoutes } from "./routes/settings";
-import { wss } from "./ws/gateway";
+import { wss, handleConnection } from "./ws/gateway";
+import { startHeartbeat } from "./services/heartbeat";
 
 async function start(): Promise<void> {
   const app = Fastify({ logger: true });
@@ -30,12 +31,16 @@ async function start(): Promise<void> {
       return;
     }
     wss.handleUpgrade(request, socket, head, (ws: unknown) => {
+      handleConnection(ws as Parameters<typeof handleConnection>[0]);
       wss.emit("connection", ws, request);
     });
   });
 
   await app.listen({ port: config.port, host: config.host });
   app.log.info(`backend listening on http://${config.host}:${config.port}`);
+
+  startHeartbeat();
+  app.log.info("heartbeat ticker started");
 }
 
 start().catch((error) => {
