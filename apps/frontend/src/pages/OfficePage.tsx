@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Application, Container, Graphics, Text } from "pixi.js";
 import { BACKEND_ORIGIN } from "../lib/constants";
+import { authFetch } from "../lib/api";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -260,8 +261,8 @@ export function OfficePage(): JSX.Element {
         const suffix = q.toString() ? `?${q.toString()}` : "";
 
         const [snapshotRes, settingsRes] = await Promise.all([
-          fetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          fetch(`${BACKEND_ORIGIN}/api/settings/app`),
+          authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
+          authFetch(`${BACKEND_ORIGIN}/api/settings/app`),
         ]);
 
         const json = (await snapshotRes.json()) as { agents?: AgentView[] };
@@ -297,7 +298,7 @@ export function OfficePage(): JSX.Element {
         if (selectedTerminal) q.set("terminal_session_id", selectedTerminal);
         if (selectedRun) q.set("run_id", selectedRun);
         const suffix = q.toString() ? `?${q.toString()}` : "";
-        const res = await fetch(`${BACKEND_ORIGIN}/api/agents/${encodeURIComponent(focusedAgentId)}${suffix}`);
+        const res = await authFetch(`${BACKEND_ORIGIN}/api/agents/${encodeURIComponent(focusedAgentId)}${suffix}`);
         const json = (await res.json()) as { agent?: { recent_events?: RecentEvent[] } };
         if (mounted) setFocusedRecentEvents((json.agent?.recent_events ?? []).slice(0, 3));
       } catch {
