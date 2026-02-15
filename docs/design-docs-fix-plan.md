@@ -1,12 +1,76 @@
 # Critical Issues Fix Plan (v2 — 통합본)
 
 작성일: 2026-02-14 (2차 취합)
+완료일: 2026-02-15
 근거: `docs/archive/docs-code-mismatch-report.md` (통합본 26건)
 원칙:
 1. 코드 품질 > 작업량/난이도
 2. 구조적 효율 — 의존성 방향을 따라 하위 계층부터 수정
 3. 동적 값 사용 — 하드코딩 금지, 세팅/환경변수에서 읽기
 4. 폴백 대신 오류 — 문제 발생 시 사용자에게 명시적 오류 노출
+
+---
+
+## 실행 결과 (2026-02-15 완료)
+
+**전체 9단계 완료. Frontend/Backend typecheck 통과.**
+
+| 순서 | Step | 상태 | 커밋 | 비고 |
+|------|------|------|------|------|
+| 1 | Schema 정합성 (#5, #7) | DONE | `111285d` | settings.ts 7개 카테고리 + defaultSettings, state.ts AgentState 필드 추가 |
+| 2 | Storage 계층 (#4, #17) | DONE | `111285d` | agents/tasks/sessions 테이블, state_current v1 마이그레이션, 4개 repo 신규 |
+| 3 | Settings API & URL (#6, #10) | DONE | `e362ff4` | settings-repo.ts, routes/settings.ts, constants.ts 환경변수화 |
+| 4 | Normalizer 의미적 추출 (#3, #14, #25) | DONE | `2e7d39e` | deriveSemanticType() 우선순위 체인, Notification→agent_blocked |
+| 5 | 상태 머신 전이 확장 (#1, #12, #17) | DONE | `47ce19b` | 25개 전이 규칙 테이블, 타이머 전이, post_complete, DB 기반 역할 판정 |
+| 6 | WebSocket & Heartbeat (#8, #9) | DONE | `d92c283` | subscribe/unsubscribe/ping, scope broadcast, heartbeat tick 루프 |
+| 7 | 클라이언트 동기화 (#15, #16) | DONE | `6de5443` | setInterval 재동기화, ws-store 지수백오프 재연결, ingest 422 응답 |
+| 8 | 프론트엔드 기능 (#2, #11, #13) | DONE | `6de5443` | PixiJS WebGL 렌더러, 말풍선, 활성작업 테이블 |
+| 9 | Hook 템플릿 (#18, #20) | DONE | `6de5443` | SubagentStop/Stop/Notification 추가 |
+
+### 변경 파일 목록
+
+**신규 파일 (7개)**
+- `apps/backend/src/storage/agents-repo.ts` — 에이전트 CRUD
+- `apps/backend/src/storage/tasks-repo.ts` — 작업 CRUD
+- `apps/backend/src/storage/sessions-repo.ts` — 세션 CRUD + stale 마킹
+- `apps/backend/src/storage/settings-repo.ts` — KV 기반 설정 저장소
+- `apps/backend/src/routes/settings.ts` — GET/PUT /api/settings
+- `apps/backend/src/services/heartbeat.ts` — 주기적 tick 루프
+
+**수정 파일 (19개)**
+- `packages/shared-schema/src/settings.ts` — 7카테고리 Zod 스키마 + defaultSettings
+- `packages/shared-schema/src/state.ts` — AgentState 필드 추가 (home_position, since, context)
+- `apps/backend/src/storage/db.ts` — 3개 테이블 DDL + v1 마이그레이션
+- `apps/backend/src/storage/state-repo.ts` — 신규 컬럼, getState/listStatesScoped
+- `apps/backend/src/services/normalizer.ts` — deriveSemanticType, resolveLocale
+- `apps/backend/src/services/state-machine.ts` — 전이 테이블 + 타이머 + post_complete
+- `apps/backend/src/ws/gateway.ts` — handleConnection, subscribe/unsubscribe/ping, broadcast
+- `apps/backend/src/routes/ingest.ts` — TransitionContext, 422 에러 응답
+- `apps/backend/src/routes/agents.ts` — DB 기반 역할/고용형태 조회
+- `apps/backend/src/routes/snapshot.ts` — tasks/sessions 실데이터 반환
+- `apps/backend/src/routes/integration.ts` — hookTemplate 6개 이벤트
+- `apps/backend/src/index.ts` — settings 라우트, heartbeat, WS handleConnection
+- `apps/frontend/src/pages/DashboardPage.tsx` — 주기적 재동기화 + 활성작업 테이블
+- `apps/frontend/src/pages/OfficePage.tsx` — PixiJS WebGL 전면 리라이트
+- `apps/frontend/src/stores/ws-store.ts` — 지수백오프 자동 재연결
+- `apps/frontend/src/lib/constants.ts` — VITE_BACKEND_ORIGIN/VITE_WS_URL 환경변수
+- `apps/frontend/src/lib/api.ts` — BACKEND_ORIGIN 사용
+- `apps/frontend/src/App.tsx` — WS_URL 사용
+- `apps/frontend/src/i18n/index.ts` — 활성작업 관련 i18n 키 추가
+
+### 구현 중 발생한 이슈 및 해결
+
+1. **`db.pragma()` 타입 에러**: better-sqlite3에 타입 선언 부재 → `db.prepare("PRAGMA user_version").get()` 패턴으로 우회
+2. **`sessions-repo.ts` 반환 타입**: `markInactiveStmt.run()` 반환 unknown → `as { changes: number }` 캐스트
+3. **`gateway.ts` wss.on() 타입**: ws 모듈 타입 선언 부재 → `WsClient` 인터페이스 + `handleConnection()` 함수 분리
+4. **`heartbeat.ts` facing 타입**: string vs literal union 불일치 → explicit cast 적용
+
+### 후속 과제 (본 플랜 범위 밖)
+
+- #21 인증 미들웨어
+- #22 이동 속도 설정 연동 (현재 120px/s 고정)
+- #23 fingerprint 기반 에이전트 식별
+- #26 seed-mock 스크립트 갱신
 
 ---
 
