@@ -7,8 +7,20 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function makeId(payload: unknown): string {
-  return `evt_${crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 16)}`;
+function makeFingerprint(
+  sessionId: string,
+  toolName: string,
+  ts: string,
+  payload: unknown,
+): string {
+  const tsBucket = ts.slice(0, 19); // second-level granularity
+  const payloadHash = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex")
+    .slice(0, 12);
+  const raw = `${sessionId}|${toolName}|${tsBucket}|${payloadHash}`;
+  return `evt_${crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16)}`;
 }
 
 /**
@@ -86,7 +98,7 @@ export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEv
   const ts = nowIso();
 
   const normalized = normalizedEventSchema.parse({
-    id: makeId({ input, ts }),
+    id: makeFingerprint(sessionId, toolName, ts, input),
     version: "1.1",
     ts,
     type,

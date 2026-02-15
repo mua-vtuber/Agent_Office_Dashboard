@@ -4,7 +4,7 @@ import type { AgentStatus } from "@aod/shared-schema";
 import { nextStatusSimple } from "../services/state-machine";
 
 const insert = db.prepare(`
-INSERT OR REPLACE INTO events (
+INSERT OR IGNORE INTO events (
   id, ts, type, workspace_id, terminal_session_id, run_id,
   source, agent_id, task_id, payload_json, raw_json
 ) VALUES (
@@ -12,6 +12,8 @@ INSERT OR REPLACE INTO events (
   @source, @agent_id, @task_id, @payload_json, @raw_json
 )
 `);
+
+const checkExists = db.prepare("SELECT 1 FROM events WHERE id = ?");
 
 type EventRow = {
   id: string;
@@ -32,6 +34,10 @@ type ScopeFilter = {
   terminal_session_id?: string;
   run_id?: string;
 };
+
+export function eventExists(id: string): boolean {
+  return checkExists.get(id) !== undefined;
+}
 
 export function insertEvent(event: NormalizedEvent): void {
   insert.run({
