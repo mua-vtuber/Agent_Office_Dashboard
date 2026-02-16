@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 type SnapshotAgent = {
   agent_id: string;
   status: string;
+  thinking_text?: string | null;
   last_event_ts: string;
 };
 
@@ -147,6 +148,7 @@ export function DashboardPage(): JSX.Element {
             snapshotJson.agents.map((a) => ({
               agent_id: a.agent_id,
               status: a.status,
+              thinking: a.thinking_text ?? null,
               last_event_ts: a.last_event_ts ?? new Date().toISOString()
             }))
           );
@@ -181,6 +183,7 @@ export function DashboardPage(): JSX.Element {
             snapshotJson.agents.map((a) => ({
               agent_id: a.agent_id,
               status: a.status,
+              thinking: a.thinking_text ?? null,
               last_event_ts: a.last_event_ts ?? new Date().toISOString()
             }))
           );
@@ -325,6 +328,9 @@ export function DashboardPage(): JSX.Element {
                 <strong>{agent.agent_id}</strong>
                 <span className={`badge ${statusClass(agent.status)}`}>{agent.status}</span>
               </div>
+              {agent.thinking ? (
+                <div className="agent-thinking">{t("dashboard_thinking")}: {agent.thinking}</div>
+              ) : null}
               <div className="agent-meta">{t("common_last")}: {agent.last_event_ts}</div>
             </article>
           ))

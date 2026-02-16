@@ -63,10 +63,11 @@ export const useWsStore = create<WsStore>((set, get) => {
         }
 
         if (msg.type === "state_update" && msg.data) {
-          const d = msg.data as { agent_id: string; next_status: string; ts: string };
+          const d = msg.data as { agent_id: string; next_status: string; thinking?: string | null; ts: string };
           useAgentStore.getState().upsert({
             agent_id: d.agent_id,
             status: d.next_status,
+            thinking: d.thinking ?? null,
             last_event_ts: d.ts,
           });
         }

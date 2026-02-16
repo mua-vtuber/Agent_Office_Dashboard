@@ -78,6 +78,19 @@ function resolveLocale(input: Record<string, unknown>): string {
   return `${lang}-${lang.toUpperCase()}`;
 }
 
+type ContentBlock = { type: string; thinking?: string; text?: string };
+
+function extractThinking(input: Record<string, unknown>): string | null {
+  const message = input.message as { content?: ContentBlock[] } | undefined;
+  if (!message || !Array.isArray(message.content)) return null;
+  const thinkingBlocks = message.content.filter(
+    (block): block is ContentBlock & { thinking: string } =>
+      block.type === "thinking" && typeof block.thinking === "string" && block.thinking.length > 0,
+  );
+  if (thinkingBlocks.length === 0) return null;
+  return thinkingBlocks[thinkingBlocks.length - 1]!.thinking;
+}
+
 export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEvent {
   const rawEventName = (input.event_name ?? input.hook_event ?? "unknown") as string;
   const sessionId = String(input.session_id ?? "unknown-session");
@@ -116,6 +129,7 @@ export function normalizeHookEvent(input: Record<string, unknown>): NormalizedEv
       tool_name: toolName || undefined,
       error_message: typeof error === "string" ? error : undefined,
       summary: input.summary,
+      thinking: extractThinking(input),
     },
     raw: {
       provider: "claude_code",

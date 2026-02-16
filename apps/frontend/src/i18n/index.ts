@@ -87,7 +87,23 @@ const resources = {
       dashboard_active_tasks: "활성 작업",
       dashboard_tasks_empty: "활성 작업이 없습니다.",
       common_assignee: "담당자",
-      common_elapsed: "경과 시간"
+      common_elapsed: "경과 시간",
+      common_thinking: "속마음",
+      settings_thought_bubble_title: "Thought Bubble (속마음)",
+      settings_thought_bubble_desc: "에이전트의 extended thinking 데이터를 말풍선으로 표시합니다.",
+      settings_thought_bubble_enabled: "Thought Bubble 표시",
+      settings_thought_bubble_max_length: "최대 글자수",
+      settings_translation_title: "번역 설정",
+      settings_translation_enabled: "번역 활성화",
+      settings_translation_api_endpoint: "API Endpoint",
+      settings_translation_api_key: "API Key",
+      settings_translation_model: "모델",
+      settings_translation_target_language: "번역 대상 언어",
+      settings_thought_bubble_save: "저장",
+      settings_thought_bubble_save_ok: "저장 완료",
+      settings_thought_bubble_save_fail: "저장 실패: {{error}}",
+      dashboard_thinking: "속마음",
+      agents_thinking: "속마음"
     }
   },
   en: {
@@ -175,7 +191,23 @@ const resources = {
       dashboard_active_tasks: "Active Tasks",
       dashboard_tasks_empty: "No active tasks.",
       common_assignee: "Assignee",
-      common_elapsed: "Elapsed"
+      common_elapsed: "Elapsed",
+      common_thinking: "Thinking",
+      settings_thought_bubble_title: "Thought Bubble",
+      settings_thought_bubble_desc: "Display agent's extended thinking data as thought bubbles.",
+      settings_thought_bubble_enabled: "Show Thought Bubbles",
+      settings_thought_bubble_max_length: "Max Length",
+      settings_translation_title: "Translation",
+      settings_translation_enabled: "Enable Translation",
+      settings_translation_api_endpoint: "API Endpoint",
+      settings_translation_api_key: "API Key",
+      settings_translation_model: "Model",
+      settings_translation_target_language: "Target Language",
+      settings_thought_bubble_save: "Save",
+      settings_thought_bubble_save_ok: "Saved",
+      settings_thought_bubble_save_fail: "Save failed: {{error}}",
+      dashboard_thinking: "Thinking",
+      agents_thinking: "Thinking"
     }
   }
 };

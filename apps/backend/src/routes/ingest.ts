@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AgentStatus } from "@aod/shared-schema";
 import { normalizeHookEvent } from "../services/normalizer";
+import { translateThinking } from "../services/translator";
 import { eventExists, insertEvent } from "../storage/events-repo";
 import { getState, upsertState } from "../storage/state-repo";
 import { getAgent, upsertAgent } from "../storage/agents-repo";
@@ -52,6 +53,13 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
 
       const since = next !== current ? event.ts : prevSince;
 
+      // Extract and translate thinking text
+      const rawThinking = (event.payload as Record<string, unknown>).thinking as string | null | undefined;
+      let thinkingText: string | null = rawThinking ?? null;
+      if (thinkingText && settings.thought_bubble?.enabled) {
+        thinkingText = await translateThinking(thinkingText);
+      }
+
       upsertState({
         agent_id: event.agent_id,
         workspace_id: event.workspace_id,
@@ -68,6 +76,7 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
           task_id: event.task_id ?? null,
           peer_agent_id: event.target_agent_id ?? null,
         }),
+        thinking_text: thinkingText,
         last_event_ts: event.ts,
       });
 
@@ -87,6 +96,7 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
             task_id: event.task_id ?? null,
             peer_agent_id: event.target_agent_id ?? null,
           },
+          thinking: thinkingText,
           triggered_by_event_id: event.id,
           ts: event.ts,
         },

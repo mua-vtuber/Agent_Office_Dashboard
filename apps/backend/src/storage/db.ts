@@ -94,3 +94,13 @@ if (userVersion < 1) {
   `);
   db.exec("PRAGMA user_version = 1");
 }
+
+// --- Migration v2: add thinking_text to state_current ---
+
+const v2Row = db.prepare("PRAGMA user_version").get() as { user_version: number } | undefined;
+const v2Version = v2Row?.user_version ?? 0;
+
+if (v2Version < 2) {
+  db.exec("ALTER TABLE state_current ADD COLUMN thinking_text TEXT DEFAULT NULL;");
+  db.exec("PRAGMA user_version = 2");
+}

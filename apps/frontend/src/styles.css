@@ -310,6 +310,18 @@ body {
   gap: 8px;
 }
 
+.agent-thinking {
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: #f0f4ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  font-size: 11px;
+  color: #4338ca;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .agent-meta {
   margin-top: 8px;
   color: var(--muted);
