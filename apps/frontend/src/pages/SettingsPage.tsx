@@ -22,6 +22,30 @@ type InstallResult = {
   next_step?: string;
 };
 
+type ThoughtBubbleForm = {
+  enabled: boolean;
+  max_length: number;
+  translation: {
+    enabled: boolean;
+    api_endpoint: string;
+    api_key: string;
+    model: string;
+    target_language: string;
+  };
+};
+
+const THOUGHT_BUBBLE_DEFAULTS: ThoughtBubbleForm = {
+  enabled: true,
+  max_length: 120,
+  translation: {
+    enabled: false,
+    api_endpoint: "https://api.anthropic.com/v1/messages",
+    api_key: "",
+    model: "claude-haiku-4-5-20251001",
+    target_language: "ko",
+  },
+};
+
 export function SettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const language = useUiSettingsStore((s) => s.language);
@@ -31,6 +55,10 @@ export function SettingsPage(): JSX.Element {
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
   const [error, setError] = useState<string>("");
+
+  // Thought bubble settings
+  const [tbForm, setTbForm] = useState<ThoughtBubbleForm>(THOUGHT_BUBBLE_DEFAULTS);
+  const [tbSaveMsg, setTbSaveMsg] = useState<string>("");
 
   const refreshStatus = async (): Promise<void> => {
     try {
@@ -42,7 +70,21 @@ export function SettingsPage(): JSX.Element {
     }
   };
 
+  // Load server settings for thought_bubble
   useEffect(() => {
+    void (async () => {
+      try {
+        const res = await authFetch(`${BACKEND_ORIGIN}/api/settings/app`);
+        if (res.ok) {
+          const json = (await res.json()) as { value?: { thought_bubble?: ThoughtBubbleForm } };
+          if (json.value?.thought_bubble) {
+            setTbForm(json.value.thought_bubble);
+          }
+        }
+      } catch {
+        // use defaults
+      }
+    })();
     void refreshStatus();
   }, []);
 
@@ -60,6 +102,41 @@ export function SettingsPage(): JSX.Element {
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to install hooks");
     }
+  };
+
+  const saveThoughtBubble = async (): Promise<void> => {
+    setTbSaveMsg("");
+    try {
+      // Fetch current full settings, then merge thought_bubble
+      const currentRes = await authFetch(`${BACKEND_ORIGIN}/api/settings/app`);
+      if (!currentRes.ok) {
+        setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: `HTTP ${currentRes.status}` }));
+        return;
+      }
+      const currentJson = (await currentRes.json()) as { value?: Record<string, unknown> };
+      const merged = { ...currentJson.value, thought_bubble: tbForm };
+
+      const res = await authFetch(`${BACKEND_ORIGIN}/api/settings/app`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ value: merged }),
+      });
+      if (res.ok) {
+        setTbSaveMsg(t("settings_thought_bubble_save_ok"));
+      } else {
+        setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: `HTTP ${res.status}` }));
+      }
+    } catch (e) {
+      setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: e instanceof Error ? e.message : "unknown" }));
+    }
+  };
+
+  const updateTb = (patch: Partial<ThoughtBubbleForm>): void => {
+    setTbForm((prev) => ({ ...prev, ...patch }));
+  };
+
+  const updateTranslation = (patch: Partial<ThoughtBubbleForm["translation"]>): void => {
+    setTbForm((prev) => ({ ...prev, translation: { ...prev.translation, ...patch } }));
   };
 
   return (
@@ -125,6 +202,91 @@ export function SettingsPage(): JSX.Element {
           ) : null}
         </article>
       </div>
+
+      <article className="panel" style={{ marginTop: "1rem" }}>
+        <h3>{t("settings_thought_bubble_title")}</h3>
+        <p>{t("settings_thought_bubble_desc")}</p>
+
+        <label>
+          <input
+            type="checkbox"
+            checked={tbForm.enabled}
+            onChange={(e) => updateTb({ enabled: e.target.checked })}
+          />
+          {t("settings_thought_bubble_enabled")}
+        </label>
+
+        <label>
+          {t("settings_thought_bubble_max_length")}
+          <input
+            type="number"
+            min={10}
+            max={500}
+            value={tbForm.max_length}
+            onChange={(e) => updateTb({ max_length: Number(e.target.value) })}
+            style={{ width: "80px", marginLeft: "0.5rem" }}
+          />
+        </label>
+
+        <h4 style={{ marginTop: "1rem" }}>{t("settings_translation_title")}</h4>
+
+        <label>
+          <input
+            type="checkbox"
+            checked={tbForm.translation.enabled}
+            onChange={(e) => updateTranslation({ enabled: e.target.checked })}
+          />
+          {t("settings_translation_enabled")}
+        </label>
+
+        <label>
+          {t("settings_translation_api_endpoint")}
+          <input
+            type="text"
+            value={tbForm.translation.api_endpoint}
+            onChange={(e) => updateTranslation({ api_endpoint: e.target.value })}
+            style={{ width: "100%" }}
+          />
+        </label>
+
+        <label>
+          {t("settings_translation_api_key")}
+          <input
+            type="password"
+            value={tbForm.translation.api_key}
+            onChange={(e) => updateTranslation({ api_key: e.target.value })}
+            style={{ width: "100%" }}
+            autoComplete="off"
+          />
+        </label>
+
+        <label>
+          {t("settings_translation_model")}
+          <input
+            type="text"
+            value={tbForm.translation.model}
+            onChange={(e) => updateTranslation({ model: e.target.value })}
+            style={{ width: "100%" }}
+          />
+        </label>
+
+        <label>
+          {t("settings_translation_target_language")}
+          <input
+            type="text"
+            value={tbForm.translation.target_language}
+            onChange={(e) => updateTranslation({ target_language: e.target.value })}
+            style={{ width: "80px" }}
+          />
+        </label>
+
+        <div className="action-row" style={{ marginTop: "0.5rem" }}>
+          <button className="list-btn" onClick={() => void saveThoughtBubble()}>
+            {t("settings_thought_bubble_save")}
+          </button>
+          {tbSaveMsg ? <span style={{ marginLeft: "0.5rem" }}>{tbSaveMsg}</span> : null}
+        </div>
+      </article>
     </section>
   );
 }
