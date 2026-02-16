@@ -13,6 +13,7 @@ export type StateRow = {
   facing: string;
   since: string;
   context_json: string;
+  thinking_text: string | null;
   last_event_ts: string;
 };
 
@@ -20,11 +21,11 @@ const upsert = db.prepare(`
 INSERT INTO state_current (
   agent_id, workspace_id, terminal_session_id, run_id,
   status, position_x, position_y, home_position_x, home_position_y,
-  facing, since, context_json, last_event_ts
+  facing, since, context_json, thinking_text, last_event_ts
 ) VALUES (
   @agent_id, @workspace_id, @terminal_session_id, @run_id,
   @status, @position_x, @position_y, @home_position_x, @home_position_y,
-  @facing, @since, @context_json, @last_event_ts
+  @facing, @since, @context_json, @thinking_text, @last_event_ts
 )
 ON CONFLICT(agent_id) DO UPDATE SET
   workspace_id=excluded.workspace_id,
@@ -38,6 +39,7 @@ ON CONFLICT(agent_id) DO UPDATE SET
   facing=excluded.facing,
   since=excluded.since,
   context_json=excluded.context_json,
+  thinking_text=COALESCE(excluded.thinking_text, state_current.thinking_text),
   last_event_ts=excluded.last_event_ts
 `);
 
@@ -54,6 +56,7 @@ export function upsertState(input: {
   facing: "left" | "right" | "up" | "down";
   since: string;
   context_json: string;
+  thinking_text: string | null;
   last_event_ts: string;
 }): void {
   upsert.run(input);
