@@ -5,6 +5,8 @@ import { authFetch } from "../lib/api";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { buildCharacter } from "../lib/character/builder";
+import { CHAR_W } from "../lib/character/types";
 
 /* ---------- Canvas constants ---------- */
 
@@ -108,8 +110,9 @@ function bubbleLabel(s: string): string {
 
 type AgentNode = {
   root: Container;
-  body: Graphics;
+  body: Container;
   ring: Graphics;
+  statusOverlay: Graphics;
   nameText: Text;
   effectText: Text;
   bubble: Container;
@@ -131,10 +134,17 @@ function createNode(agent: AgentView, pos: Point): AgentNode {
   ring.visible = agent.status === "working";
   root.addChild(ring);
 
-  // Body circle
-  const body = new Graphics();
-  body.circle(0, 0, AGENT_R).fill(statusColor(agent.status));
-  root.addChild(body);
+  // Fallback body circle (shown until character loads)
+  const fallback = new Container();
+  const fallbackGfx = new Graphics();
+  fallbackGfx.circle(0, 0, AGENT_R).fill(statusColor(agent.status));
+  fallback.addChild(fallbackGfx);
+  root.addChild(fallback);
+
+  // Status overlay glow (drawn on top of character)
+  const statusOverlay = new Graphics();
+  statusOverlay.circle(0, 0, AGENT_R + 2).stroke({ color: statusColor(agent.status), width: 2, alpha: 0.7 });
+  root.addChild(statusOverlay);
 
   // Agent name
   const shortName = (agent.agent_id.split("/").at(-1) ?? agent.agent_id).slice(0, 10);
@@ -162,7 +172,20 @@ function createNode(agent: AgentView, pos: Point): AgentNode {
   root.addChild(bubble);
   applyBubble(bubble, bubbleBg, bubbleTxt, agent.status);
 
-  return { root, body, ring, nameText, effectText, bubble, bubbleBg, bubbleTxt, cur: { ...pos }, tgt: { ...pos }, status: agent.status };
+  const node: AgentNode = { root, body: fallback, ring, statusOverlay, nameText, effectText, bubble, bubbleBg, bubbleTxt, cur: { ...pos }, tgt: { ...pos }, status: agent.status };
+
+  // Async: load character sprite and replace fallback
+  const charScale = (AGENT_R * 2) / CHAR_W;
+  buildCharacter(agent.agent_id, charScale).then((charContainer) => {
+    if (root.destroyed) return;
+    const idx = root.getChildIndex(fallback);
+    root.removeChild(fallback);
+    fallback.destroy({ children: true });
+    root.addChildAt(charContainer, idx);
+    node.body = charContainer;
+  });
+
+  return node;
 }
 
 function applyBubble(container: Container, bg: Graphics, txt: Text, status: string): void {
@@ -181,8 +204,9 @@ function applyBubble(container: Container, bg: Graphics, txt: Text, status: stri
 }
 
 function refreshNode(node: AgentNode, agent: AgentView): void {
-  node.body.clear();
-  node.body.circle(0, 0, AGENT_R).fill(statusColor(agent.status));
+  // Update status overlay glow (character sprite itself is immutable)
+  node.statusOverlay.clear();
+  node.statusOverlay.circle(0, 0, AGENT_R + 2).stroke({ color: statusColor(agent.status), width: 2, alpha: 0.7 });
   node.ring.visible = agent.status === "working";
   node.effectText.text = effectLabel(agent.status);
   applyBubble(node.bubble, node.bubbleBg, node.bubbleTxt, agent.status);
