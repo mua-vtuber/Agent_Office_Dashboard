@@ -23,6 +23,7 @@
 - `office-layout-spec.md`: 오피스 좌석/구역 레이아웃 사양
 - `office-behavior-spec.md`: 상태별 모션/이펙트/완료 후 행동 사양
 - `character-appearance-spec.md`: 시드 기반 캐릭터 외형 생성/SVG 팔레트 스왑 사양
+- `character-appearance-impl-plan.md`: 캐릭터 외형 5-Phase 구현 계획 (자율 실행형)
 - `agents-tab-spec.md`: Agents 탭 UI/라벨 규칙 사양
 - `settings-spec.md`: 설정 항목/권한/유효성 규칙
 - `session-routing.md`: 다중 터미널 추적/대시보드 라우팅
