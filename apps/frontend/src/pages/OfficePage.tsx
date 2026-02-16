@@ -289,8 +289,15 @@ export function OfficePage(): JSX.Element {
           authFetch(`${BACKEND_ORIGIN}/api/settings/app`),
         ]);
 
-        const json = (await snapshotRes.json()) as { agents?: AgentView[] };
-        if (mounted && Array.isArray(json.agents)) setManyAgents(json.agents);
+        const json = (await snapshotRes.json()) as { agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }> };
+        if (mounted && Array.isArray(json.agents)) {
+          setManyAgents(json.agents.map((a) => ({
+            agent_id: a.agent_id,
+            status: a.status,
+            thinking: a.thinking_text ?? null,
+            last_event_ts: a.last_event_ts,
+          })));
+        }
 
         if (settingsRes.ok) {
           const sJson = (await settingsRes.json()) as { value?: { operations?: { move_speed_px_per_sec?: number } } };
