@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 type SnapshotAgent = {
   agent_id: string;
   status: string;
+  thinking_text?: string | null;
   last_event_ts: string;
 };
 
@@ -147,6 +148,7 @@ export function DashboardPage(): JSX.Element {
             snapshotJson.agents.map((a) => ({
               agent_id: a.agent_id,
               status: a.status,
+              thinking: a.thinking_text ?? null,
               last_event_ts: a.last_event_ts ?? new Date().toISOString()
             }))
           );
@@ -181,6 +183,7 @@ export function DashboardPage(): JSX.Element {
             snapshotJson.agents.map((a) => ({
               agent_id: a.agent_id,
               status: a.status,
+              thinking: a.thinking_text ?? null,
               last_event_ts: a.last_event_ts ?? new Date().toISOString()
             }))
           );

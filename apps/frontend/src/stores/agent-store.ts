@@ -3,6 +3,7 @@ import { create } from "zustand";
 export type AgentView = {
   agent_id: string;
   status: string;
+  thinking: string | null;
   last_event_ts: string;
 };
 
