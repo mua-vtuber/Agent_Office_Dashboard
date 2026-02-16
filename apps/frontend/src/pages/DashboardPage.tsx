@@ -328,6 +328,9 @@ export function DashboardPage(): JSX.Element {
                 <strong>{agent.agent_id}</strong>
                 <span className={`badge ${statusClass(agent.status)}`}>{agent.status}</span>
               </div>
+              {agent.thinking ? (
+                <div className="agent-thinking">{t("dashboard_thinking")}: {agent.thinking}</div>
+              ) : null}
               <div className="agent-meta">{t("common_last")}: {agent.last_event_ts}</div>
             </article>
           ))

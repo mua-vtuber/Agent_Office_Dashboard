@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BACKEND_ORIGIN } from "../lib/constants";
 import { authFetch } from "../lib/api";
+import { useAgentStore } from "../stores/agent-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -37,6 +38,7 @@ export function AgentsPage(): JSX.Element {
   const { t } = useTranslation();
   const badge = (type: EmploymentType): string => (type === "employee" ? t("agents_employee") : t("agents_contractor"));
   const [searchParams, setSearchParams] = useSearchParams();
+  const agentsMap = useAgentStore((s) => s.agents);
   const [agents, setAgents] = useState<AgentRow[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -247,6 +249,9 @@ export function AgentsPage(): JSX.Element {
             <div>
               <p><strong>{detail.display_name}</strong> ({detail.agent_id})</p>
               <p>{t("agents_meta", { role: detail.role, employment: badge(detail.employment_type), status: detail.status })}</p>
+              {agentsMap[detail.agent_id]?.thinking ? (
+                <p><strong>{t("agents_thinking")}:</strong> {agentsMap[detail.agent_id]!.thinking}</p>
+              ) : null}
               <p>{detail.intro}</p>
               <p>{t("agents_tools")}: {detail.tools.join(", ")}</p>
               <p>{t("agents_expertise")}: {detail.expertise.join(", ")}</p>

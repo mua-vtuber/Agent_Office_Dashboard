@@ -100,9 +100,19 @@ function effectLabel(s: string): string {
   return "";
 }
 
-function bubbleLabel(s: string): string {
-  if (s === "working") return "Working...";
-  if (s === "meeting") return "Meeting...";
+type ThoughtBubbleConfig = { enabled: boolean; max_length: number };
+
+function truncateText(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 3) + "...";
+}
+
+function resolveBubbleText(thinking: string | null, status: string, config: ThoughtBubbleConfig): string {
+  if (config.enabled && thinking) {
+    return truncateText(thinking, config.max_length);
+  }
+  if (status === "working") return "Working...";
+  if (status === "meeting") return "Meeting...";
   return "";
 }
 
@@ -121,9 +131,10 @@ type AgentNode = {
   cur: Point;
   tgt: Point;
   status: string;
+  thinking: string | null;
 };
 
-function createNode(agent: AgentView, pos: Point): AgentNode {
+function createNode(agent: AgentView, pos: Point, tbConfig: ThoughtBubbleConfig): AgentNode {
   const root = new Container();
   root.x = pos.x;
   root.y = pos.y;
@@ -170,9 +181,9 @@ function createNode(agent: AgentView, pos: Point): AgentNode {
   bubble.addChild(bubbleBg);
   bubble.addChild(bubbleTxt);
   root.addChild(bubble);
-  applyBubble(bubble, bubbleBg, bubbleTxt, agent.status);
+  applyBubble(bubble, bubbleBg, bubbleTxt, agent.thinking, agent.status, tbConfig);
 
-  const node: AgentNode = { root, body: fallback, ring, statusOverlay, nameText, effectText, bubble, bubbleBg, bubbleTxt, cur: { ...pos }, tgt: { ...pos }, status: agent.status };
+  const node: AgentNode = { root, body: fallback, ring, statusOverlay, nameText, effectText, bubble, bubbleBg, bubbleTxt, cur: { ...pos }, tgt: { ...pos }, status: agent.status, thinking: agent.thinking };
 
   // Async: load character sprite and replace fallback
   const charScale = (AGENT_R * 2) / CHAR_W;
@@ -188,29 +199,48 @@ function createNode(agent: AgentView, pos: Point): AgentNode {
   return node;
 }
 
-function applyBubble(container: Container, bg: Graphics, txt: Text, status: string): void {
-  const label = bubbleLabel(status);
+function applyBubble(container: Container, bg: Graphics, txt: Text, thinking: string | null, status: string, tbConfig: ThoughtBubbleConfig): void {
+  const label = resolveBubbleText(thinking, status, tbConfig);
   if (!label) { container.visible = false; return; }
   container.visible = true;
   txt.text = label;
-  const pad = 4;
-  const w = Math.max(48, txt.width + pad * 2);
-  const h = 16;
+  const isThought = tbConfig.enabled && !!thinking;
+  const pad = 6;
+  const w = Math.min(140, Math.max(48, txt.width + pad * 2));
+  const h = isThought ? Math.max(18, Math.min(36, txt.height + pad * 2)) : 16;
+  txt.style.wordWrap = isThought;
+  txt.style.wordWrapWidth = w - pad * 2;
   bg.clear();
-  bg.roundRect(-w / 2, 0, w, h, 4).fill({ color: 0xffffff, alpha: 0.92 }).stroke({ color: 0xbbbbbb, width: 1 });
+
+  if (isThought) {
+    // Cloud-shaped thought bubble
+    bg.roundRect(-w / 2, 0, w, h, 6)
+      .fill({ color: 0xf0f4ff, alpha: 0.95 })
+      .stroke({ color: 0x9999cc, width: 1 });
+    // Thought trail dots (small circles below bubble)
+    bg.circle(-4, h + 4, 3).fill({ color: 0xf0f4ff, alpha: 0.9 }).stroke({ color: 0x9999cc, width: 0.5 });
+    bg.circle(-1, h + 10, 2).fill({ color: 0xf0f4ff, alpha: 0.8 }).stroke({ color: 0x9999cc, width: 0.5 });
+  } else {
+    // Standard speech bubble
+    bg.roundRect(-w / 2, 0, w, h, 4)
+      .fill({ color: 0xffffff, alpha: 0.92 })
+      .stroke({ color: 0xbbbbbb, width: 1 });
+  }
+
   txt.x = 0;
   txt.y = h / 2;
   container.y = -(AGENT_R + 8 + h);
 }
 
-function refreshNode(node: AgentNode, agent: AgentView): void {
+function refreshNode(node: AgentNode, agent: AgentView, tbConfig: ThoughtBubbleConfig): void {
   // Update status overlay glow (character sprite itself is immutable)
   node.statusOverlay.clear();
   node.statusOverlay.circle(0, 0, AGENT_R + 2).stroke({ color: statusColor(agent.status), width: 2, alpha: 0.7 });
   node.ring.visible = agent.status === "working";
   node.effectText.text = effectLabel(agent.status);
-  applyBubble(node.bubble, node.bubbleBg, node.bubbleTxt, agent.status);
+  applyBubble(node.bubble, node.bubbleBg, node.bubbleTxt, agent.thinking, agent.status, tbConfig);
   node.status = agent.status;
+  node.thinking = agent.thinking;
 }
 
 /* ---------- Static scene ---------- */
@@ -260,6 +290,7 @@ export function OfficePage(): JSX.Element {
   const layerRef = useRef<Container | null>(null);
   const nodesRef = useRef<Map<string, AgentNode>>(new Map());
   const moveSpeedRef = useRef(DEFAULT_MOVE_SPEED);
+  const tbConfigRef = useRef<ThoughtBubbleConfig>({ enabled: true, max_length: 120 });
   const [pixiReady, setPixiReady] = useState(false);
 
   const agentsMap = useAgentStore((s) => s.agents);
@@ -300,9 +331,21 @@ export function OfficePage(): JSX.Element {
         }
 
         if (settingsRes.ok) {
-          const sJson = (await settingsRes.json()) as { value?: { operations?: { move_speed_px_per_sec?: number } } };
+          const sJson = (await settingsRes.json()) as {
+            value?: {
+              operations?: { move_speed_px_per_sec?: number };
+              thought_bubble?: { enabled?: boolean; max_length?: number };
+            };
+          };
           const speed = sJson.value?.operations?.move_speed_px_per_sec;
           if (typeof speed === "number" && speed >= 30) moveSpeedRef.current = speed;
+          const tb = sJson.value?.thought_bubble;
+          if (tb) {
+            tbConfigRef.current = {
+              enabled: tb.enabled ?? true,
+              max_length: tb.max_length ?? 120,
+            };
+          }
         }
       } catch (e) {
         if (mounted) setError(e instanceof Error ? e.message : "failed to load snapshot");
@@ -431,19 +474,22 @@ export function OfficePage(): JSX.Element {
     }
 
     // Upsert agents
+    const tbConfig = tbConfigRef.current;
     for (const agent of agents) {
       const rawTgt = targets[agent.agent_id] ?? seatFor(agent, workers);
       const tp = { x: pxX(rawTgt.x), y: pxY(rawTgt.y) };
 
       let n = nodes.get(agent.agent_id);
       if (!n) {
-        n = createNode(agent, tp);
+        n = createNode(agent, tp, tbConfig);
         layer.addChild(n.root);
         nodes.set(agent.agent_id, n);
       }
 
       n.tgt = tp;
-      if (n.status !== agent.status) refreshNode(n, agent);
+      if (n.status !== agent.status || n.thinking !== agent.thinking) {
+        refreshNode(n, agent, tbConfig);
+      }
       n.root.alpha = focusedAgentId && focusedAgentId !== agent.agent_id ? 0.4 : 1;
     }
   }, [agents, targets, workers, focusedAgentId, pixiReady]);
@@ -461,6 +507,9 @@ export function OfficePage(): JSX.Element {
           <h3>{t("office_focus_title")}</h3>
           <p><strong>{focusedAgent.agent_id}</strong></p>
           <p>{t("office_focus_status")}: {focusedAgent.status}</p>
+          {focusedAgent.thinking ? (
+            <p>{t("common_thinking")}: {focusedAgent.thinking}</p>
+          ) : null}
           <p>{t("office_focus_last_event")}: {focusedAgent.last_event_ts}</p>
           <h4>{t("office_focus_recent_events")}</h4>
           {focusedEventsLoading ? <p>{t("common_loading")}</p> : null}
