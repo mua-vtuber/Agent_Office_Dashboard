@@ -24,5 +24,6 @@ export interface AgentState {
     task_id: string | null;
     peer_agent_id: string | null;
   };
+  thinking: string | null;
   last_event_ts: string;
 }
