@@ -23,6 +23,20 @@ const postCompleteWeightsSchema = z.object({
   resting: z.number().min(0).max(1),
 });
 
+const translationSettingsSchema = z.object({
+  enabled: z.boolean(),
+  api_endpoint: z.string().min(1),
+  api_key: z.string(),
+  model: z.string().min(1),
+  target_language: z.string().min(1),
+});
+
+const thoughtBubbleSchema = z.object({
+  enabled: z.boolean(),
+  max_length: z.number().int().min(10).max(500),
+  translation: translationSettingsSchema,
+});
+
 // --- Settings schema (settings-spec.md §2) ---
 
 export const settingsSchema = z.object({
@@ -94,6 +108,9 @@ export const settingsSchema = z.object({
     resting_zzz_effect_enabled: z.boolean(),
     motion_intensity: z.enum(["low", "normal", "high"]),
   }),
+
+  /** §2.8 Thought Bubble */
+  thought_bubble: thoughtBubbleSchema,
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -150,5 +167,16 @@ export const defaultSettings: Settings = {
     failed_scream_motion_enabled: true,
     resting_zzz_effect_enabled: true,
     motion_intensity: "normal",
+  },
+  thought_bubble: {
+    enabled: true,
+    max_length: 120,
+    translation: {
+      enabled: false,
+      api_endpoint: "https://api.anthropic.com/v1/messages",
+      api_key: "",
+      model: "claude-haiku-4-5-20251001",
+      target_language: "ko",
+    },
   },
 };
