@@ -27,6 +27,7 @@
 - 상태 전이 규칙: `state-machine.md`
 - 오피스 레이아웃: `office-layout-spec.md`
 - 오피스 행동/모션: `office-behavior-spec.md`
+- 캐릭터 외형 생성: `character-appearance-spec.md`
 - Agents 탭 사양: `agents-tab-spec.md`
 - 설정 사양: `settings-spec.md`
 - 세션 라우팅: `session-routing.md`
