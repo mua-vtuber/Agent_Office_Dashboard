@@ -5,6 +5,7 @@ import { translateThinking } from "../services/translator";
 import { eventExists, insertEvent } from "../storage/events-repo";
 import { getState, upsertState } from "../storage/state-repo";
 import { getAgent, upsertAgent } from "../storage/agents-repo";
+import { upsertTask, getTask } from "../storage/tasks-repo";
 import { nextStatus, getAppSettings } from "../services/state-machine";
 import { broadcast } from "../ws/gateway";
 import { serializeError, summarizeHookBody } from "../utils/logging";
@@ -80,6 +81,37 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
         thinking_text: thinkingText,
         last_event_ts: event.ts,
       });
+
+      // Task tracking
+      if (event.task_id) {
+        const taskBase = {
+          task_id: event.task_id,
+          agent_id: event.agent_id,
+          workspace_id: event.workspace_id,
+          terminal_session_id: event.terminal_session_id,
+          run_id: event.run_id,
+          last_event_ts: event.ts,
+        };
+
+        if (event.type === "task_started") {
+          upsertTask({ ...taskBase, status: "active", started_at: event.ts });
+        } else if (event.type === "task_completed") {
+          upsertTask({ ...taskBase, status: "completed", completed_at: event.ts });
+        } else if (event.type === "task_failed") {
+          upsertTask({ ...taskBase, status: "failed", failed_at: event.ts });
+        } else {
+          // Update last_event_ts on existing active task
+          const existing = getTask(event.task_id);
+          if (existing && existing.status === "active") {
+            upsertTask({ ...taskBase, status: "active" });
+          }
+        }
+
+        const taskRow = getTask(event.task_id);
+        if (taskRow) {
+          broadcast({ type: "task_update", data: taskRow });
+        }
+      }
 
       broadcast({ type: "event", data: event });
       broadcast({

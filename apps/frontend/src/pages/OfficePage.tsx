@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Application, Container, Graphics, Text } from "pixi.js";
-import { BACKEND_ORIGIN } from "../lib/constants";
-import { authFetch } from "../lib/api";
+import { getBackendOrigin } from "../lib/constants";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
+import { useAppSettingsStore } from "../stores/app-settings-store";
+import { useErrorStore } from "../stores/error-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { buildCharacter } from "../lib/character/builder";
@@ -23,9 +24,7 @@ type RecentEvent = { id: string; ts: string; type: string; agent_id: string };
 
 /* ---------- Layout constants ---------- */
 
-const pantryZone: Bounds = { x1: 76, x2: 100, y1: 0, y2: 100 };
-const roamZone: Bounds = { x1: 8, x2: 70, y1: 12, y2: 92 };
-const seatPoints: Point[] = [
+const DEFAULT_SEAT_POINTS: Point[] = [
   { x: 20, y: 18 },
   { x: 14, y: 30 }, { x: 24, y: 30 },
   { x: 14, y: 46 }, { x: 24, y: 46 },
@@ -34,9 +33,14 @@ const seatPoints: Point[] = [
   { x: 46, y: 46 }, { x: 56, y: 46 },
   { x: 46, y: 62 }, { x: 56, y: 62 },
 ];
-const meetingSpots: Point[] = [
-  { x: 40, y: 34 }, { x: 40, y: 50 }, { x: 40, y: 66 },
+const DEFAULT_MEETING_SPOTS: Point[] = [
+  { x: 40, y: 34 },
+  { x: 40, y: 50 },
+  { x: 40, y: 66 }
 ];
+
+const pantryZone: Bounds = { x1: 76, x2: 100, y1: 0, y2: 100 };
+const roamZone: Bounds = { x1: 8, x2: 70, y1: 12, y2: 92 };
 
 /* ---------- Helpers ---------- */
 
@@ -60,13 +64,13 @@ function pickInZone(zone: Bounds, seed: number): Point {
 
 function isManager(id: string): boolean { return id.endsWith("/leader"); }
 
-function seatFor(agent: AgentView, workers: AgentView[]): Point {
+function seatFor(agent: AgentView, workers: AgentView[], seatPoints: Point[]): Point {
   if (isManager(agent.agent_id)) return seatPoints[0] ?? { x: 20, y: 18 };
   const idx = workers.findIndex((w) => w.agent_id === agent.agent_id);
   return seatPoints[(idx % (seatPoints.length - 1)) + 1] ?? seatPoints[1] ?? { x: 14, y: 30 };
 }
 
-function targetFor(agent: AgentView, workers: AgentView[], tick: number): Point {
+function targetFor(agent: AgentView, workers: AgentView[], tick: number, seatPoints: Point[], meetingSpots: Point[]): Point {
   const s = agent.status;
   if (s === "meeting" || s === "handoff" || s === "returning") {
     const i = hashSeed(agent.agent_id) % meetingSpots.length;
@@ -76,7 +80,7 @@ function targetFor(agent: AgentView, workers: AgentView[], tick: number): Point 
     return pickInZone(pantryZone, hashSeed(`${agent.agent_id}-pantry`));
   if (s === "roaming" || s === "completed")
     return pickInZone(roamZone, hashSeed(`${agent.agent_id}-roam-${tick}`));
-  return seatFor(agent, workers);
+  return seatFor(agent, workers, seatPoints);
 }
 
 function statusColor(s: string): number {
@@ -245,7 +249,7 @@ function refreshNode(node: AgentNode, agent: AgentView, tbConfig: ThoughtBubbleC
 
 /* ---------- Static scene ---------- */
 
-function drawScene(stage: Container): void {
+function drawScene(stage: Container, seatPoints: Point[]): void {
   const bg = new Graphics();
   // Floor
   bg.rect(0, 0, CW, CH).fill(0xe8e0d8);
@@ -295,25 +299,39 @@ export function OfficePage(): JSX.Element {
 
   const agentsMap = useAgentStore((s) => s.agents);
   const setManyAgents = useAgentStore((s) => s.setMany);
-  const [error, setError] = useState("");
+  const pushError = useErrorStore((s) => s.push);
+  const settings = useAppSettingsStore((s) => s.settings);
   const [roamTick, setRoamTick] = useState(0);
   const [focusedRecentEvents, setFocusedRecentEvents] = useState<RecentEvent[]>([]);
   const [focusedEventsLoading, setFocusedEventsLoading] = useState(false);
   const focusedAgentId = searchParams.get("agent_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
 
+  const seatPoints = useMemo((): Point[] => {
+    const sp = settings?.office_layout?.seat_positions;
+    if (sp && Object.keys(sp).length > 0) return Object.values(sp) as Point[];
+    return DEFAULT_SEAT_POINTS;
+  }, [settings]);
+
+  const meetingSpots = useMemo((): Point[] => {
+    const ms = settings?.office_layout?.meeting_spots;
+    if (ms && Object.keys(ms).length > 0) return Object.values(ms) as Point[];
+    return DEFAULT_MEETING_SPOTS;
+  }, [settings]);
+
   /* Fetch snapshot + settings */
   useEffect(() => {
     let mounted = true;
     void (async () => {
       try {
+        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
         const [snapshotRes, settingsRes] = await Promise.all([
-          authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          authFetch(`${BACKEND_ORIGIN}/api/settings/app`),
+          fetch(`${origin}/api/snapshot${suffix}`),
+          fetch(`${origin}/api/settings/app`),
         ]);
 
         const json = (await snapshotRes.json()) as { agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }> };
@@ -344,11 +362,11 @@ export function OfficePage(): JSX.Element {
           }
         }
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "failed to load snapshot");
+        if (mounted) pushError(t("office_title"), e instanceof Error ? e.message : "failed to load office snapshot");
       }
     })();
     return () => { mounted = false; };
-  }, [setManyAgents, selectedTerminal]);
+  }, [setManyAgents, selectedTerminal, pushError, t]);
 
   /* Roam tick */
   useEffect(() => {
@@ -363,10 +381,12 @@ export function OfficePage(): JSX.Element {
     setFocusedEventsLoading(true);
     void (async () => {
       try {
+        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
-        const res = await authFetch(`${BACKEND_ORIGIN}/api/agents/${encodeURIComponent(focusedAgentId)}${suffix}`);
+        const encoded = encodeURIComponent(focusedAgentId);
+        const res = await fetch(`${origin}/api/agents/${encoded}${suffix}`);
         const json = (await res.json()) as { agent?: { recent_events?: RecentEvent[] } };
         if (mounted) setFocusedRecentEvents((json.agent?.recent_events ?? []).slice(0, 3));
       } catch {
@@ -384,8 +404,8 @@ export function OfficePage(): JSX.Element {
     [agents],
   );
   const targets = useMemo(
-    () => Object.fromEntries(agents.map((a) => [a.agent_id, targetFor(a, workers, roamTick)])),
-    [agents, workers, roamTick],
+    () => Object.fromEntries(agents.map((a) => [a.agent_id, targetFor(a, workers, roamTick, seatPoints, meetingSpots)])),
+    [agents, workers, roamTick, seatPoints, meetingSpots],
   );
   const focusedAgent = useMemo(
     () => agents.find((a) => a.agent_id === focusedAgentId) ?? null,
@@ -406,7 +426,7 @@ export function OfficePage(): JSX.Element {
       el.appendChild(app.canvas);
       appRef.current = app;
 
-      drawScene(app.stage);
+      drawScene(app.stage, seatPoints);
       const layer = new Container();
       app.stage.addChild(layer);
       layerRef.current = layer;
@@ -449,9 +469,9 @@ export function OfficePage(): JSX.Element {
       layerRef.current = null;
       if (appRef.current) { appRef.current.destroy(true); appRef.current = null; }
     };
-  }, []);
+  }, [seatPoints]);
 
-  /* Sync agents → PixiJS sprites */
+  /* Sync agents -> PixiJS sprites */
   useEffect(() => {
     if (!pixiReady || !layerRef.current) return;
     const layer = layerRef.current;
@@ -470,7 +490,7 @@ export function OfficePage(): JSX.Element {
     // Upsert agents
     const tbConfig = tbConfigRef.current;
     for (const agent of agents) {
-      const rawTgt = targets[agent.agent_id] ?? seatFor(agent, workers);
+      const rawTgt = targets[agent.agent_id] ?? seatFor(agent, workers, seatPoints);
       const tp = { x: pxX(rawTgt.x), y: pxY(rawTgt.y) };
 
       let n = nodes.get(agent.agent_id);
@@ -486,13 +506,12 @@ export function OfficePage(): JSX.Element {
       }
       n.root.alpha = focusedAgentId && focusedAgentId !== agent.agent_id ? 0.4 : 1;
     }
-  }, [agents, targets, workers, focusedAgentId, pixiReady]);
+  }, [agents, targets, workers, focusedAgentId, pixiReady, seatPoints]);
 
   return (
     <section>
       <h2>{t("office_title")}</h2>
       <p>{t("office_subtitle")}</p>
-      {error ? <p className="error">{error}</p> : null}
 
       <div ref={wrapperRef} className="office-canvas" style={{ width: CW, maxWidth: "100%" }} />
 

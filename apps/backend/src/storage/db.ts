@@ -56,14 +56,20 @@ CREATE TABLE IF NOT EXISTS agents (
 );
 
 CREATE TABLE IF NOT EXISTS tasks (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('created','started','completed','failed')),
-  assignee_id TEXT,
-  manager_id TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  task_id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  workspace_id TEXT NOT NULL,
+  terminal_session_id TEXT NOT NULL,
+  run_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  started_at TEXT,
+  completed_at TEXT,
+  failed_at TEXT,
+  last_event_ts TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status);
+CREATE INDEX IF NOT EXISTS idx_tasks_scope ON tasks (workspace_id, terminal_session_id, run_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
   workspace_id TEXT NOT NULL,

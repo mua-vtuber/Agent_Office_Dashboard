@@ -1,62 +1,88 @@
 import { db } from "./db";
 
 export type TaskRow = {
-  id: string;
-  title: string;
-  status: "created" | "started" | "completed" | "failed";
-  assignee_id: string | null;
-  manager_id: string | null;
-  created_at: string;
-  updated_at: string;
+  task_id: string;
+  agent_id: string;
+  workspace_id: string;
+  terminal_session_id: string;
+  run_id: string;
+  status: "active" | "completed" | "failed";
+  started_at: string | null;
+  completed_at: string | null;
+  failed_at: string | null;
+  last_event_ts: string;
 };
 
-const upsertStmt = db.prepare(`
-INSERT INTO tasks (id, title, status, assignee_id, manager_id, created_at, updated_at)
-VALUES (@id, @title, @status, @assignee_id, @manager_id, @created_at, @updated_at)
-ON CONFLICT(id) DO UPDATE SET
-  title=excluded.title,
+const upsert = db.prepare(`
+INSERT INTO tasks (task_id, agent_id, workspace_id, terminal_session_id, run_id, status, started_at, completed_at, failed_at, last_event_ts)
+VALUES (@task_id, @agent_id, @workspace_id, @terminal_session_id, @run_id, @status, @started_at, @completed_at, @failed_at, @last_event_ts)
+ON CONFLICT(task_id) DO UPDATE SET
+  agent_id=excluded.agent_id,
+  workspace_id=excluded.workspace_id,
+  terminal_session_id=excluded.terminal_session_id,
+  run_id=excluded.run_id,
   status=excluded.status,
-  assignee_id=excluded.assignee_id,
-  manager_id=excluded.manager_id,
-  updated_at=excluded.updated_at
+  started_at=COALESCE(excluded.started_at, tasks.started_at),
+  completed_at=COALESCE(excluded.completed_at, tasks.completed_at),
+  failed_at=COALESCE(excluded.failed_at, tasks.failed_at),
+  last_event_ts=excluded.last_event_ts
 `);
 
-const getStmt = db.prepare("SELECT * FROM tasks WHERE id = ?");
-const listActiveStmt = db.prepare(
-  "SELECT * FROM tasks WHERE status IN ('created','started') ORDER BY created_at DESC"
-);
-const listByAssigneeStmt = db.prepare(
-  "SELECT * FROM tasks WHERE assignee_id = ? ORDER BY created_at DESC"
-);
-const listScopedStmt = db.prepare(
-  "SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?"
-);
-
 export function upsertTask(input: {
-  id: string;
-  title: string;
-  status: string;
-  assignee_id: string | null;
-  manager_id: string | null;
-  created_at: string;
-  updated_at: string;
+  task_id: string;
+  agent_id: string;
+  workspace_id: string;
+  terminal_session_id: string;
+  run_id: string;
+  status: "active" | "completed" | "failed";
+  started_at?: string | null;
+  completed_at?: string | null;
+  failed_at?: string | null;
+  last_event_ts: string;
 }): void {
-  upsertStmt.run(input);
-}
-
-export function getTask(taskId: string): TaskRow | null {
-  const row = getStmt.get(taskId) as TaskRow | undefined;
-  return row ?? null;
+  upsert.run({
+    task_id: input.task_id,
+    agent_id: input.agent_id,
+    workspace_id: input.workspace_id,
+    terminal_session_id: input.terminal_session_id,
+    run_id: input.run_id,
+    status: input.status,
+    started_at: input.started_at ?? null,
+    completed_at: input.completed_at ?? null,
+    failed_at: input.failed_at ?? null,
+    last_event_ts: input.last_event_ts,
+  });
 }
 
 export function listActiveTasks(): TaskRow[] {
-  return listActiveStmt.all() as TaskRow[];
+  return db.prepare("SELECT * FROM tasks WHERE status = 'active' ORDER BY started_at DESC").all() as TaskRow[];
 }
 
-export function listTasksByAssignee(assigneeId: string): TaskRow[] {
-  return listByAssigneeStmt.all(assigneeId) as TaskRow[];
+export function listTasksScoped(filter: {
+  workspace_id?: string;
+  terminal_session_id?: string;
+  run_id?: string;
+}): TaskRow[] {
+  const where: string[] = [];
+  const args: unknown[] = [];
+  if (filter.workspace_id) {
+    where.push("workspace_id = ?");
+    args.push(filter.workspace_id);
+  }
+  if (filter.terminal_session_id) {
+    where.push("terminal_session_id = ?");
+    args.push(filter.terminal_session_id);
+  }
+  if (filter.run_id) {
+    where.push("run_id = ?");
+    args.push(filter.run_id);
+  }
+  const sql = `SELECT * FROM tasks ${
+    where.length > 0 ? `WHERE ${where.join(" AND ")}` : ""
+  } ORDER BY started_at DESC`;
+  return db.prepare(sql).all(...args) as TaskRow[];
 }
 
-export function listTasks(limit = 100): TaskRow[] {
-  return listScopedStmt.all(limit) as TaskRow[];
+export function getTask(taskId: string): TaskRow | undefined {
+  return db.prepare("SELECT * FROM tasks WHERE task_id = ?").get(taskId) as TaskRow | undefined;
 }

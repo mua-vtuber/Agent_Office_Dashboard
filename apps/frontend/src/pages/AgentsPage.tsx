@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { BACKEND_ORIGIN } from "../lib/constants";
-import { authFetch } from "../lib/api";
+import { getBackendOrigin } from "../lib/constants";
 import { useAgentStore } from "../stores/agent-store";
+import { useErrorStore } from "../stores/error-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 
@@ -36,7 +36,7 @@ export function AgentsPage(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string>("");
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   const [employmentFilter, setEmploymentFilter] = useState<"all" | EmploymentType>("all");
-  const [error, setError] = useState<string>("");
+  const pushError = useErrorStore((s) => s.push);
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
   const selectedAgentParam = searchParams.get("agent_id") ?? "";
 
@@ -44,11 +44,12 @@ export function AgentsPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
+        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
-        const agentsRes = await authFetch(`${BACKEND_ORIGIN}/api/agents${suffix}`);
+        const agentsRes = await fetch(`${origin}/api/agents${suffix}`);
         const json = (await agentsRes.json()) as { agents?: AgentRow[] };
         if (mounted && Array.isArray(json.agents)) {
           setAgents(json.agents);
@@ -61,34 +62,35 @@ export function AgentsPage(): JSX.Element {
           }
         }
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "failed to load agents");
+        if (mounted) pushError(t("agents_title"), e instanceof Error ? e.message : "failed to load agents");
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [selectedTerminal, selectedAgentParam]);
+  }, [selectedTerminal, selectedAgentParam, pushError, t]);
 
   useEffect(() => {
     if (!selectedId) return;
     let mounted = true;
     void (async () => {
       try {
+        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
         const encoded = encodeURIComponent(selectedId);
-        const res = await authFetch(`${BACKEND_ORIGIN}/api/agents/${encoded}${suffix}`);
+        const res = await fetch(`${origin}/api/agents/${encoded}${suffix}`);
         const json = (await res.json()) as { agent?: AgentDetail };
         if (mounted) setDetail(json.agent ?? null);
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "failed to load agent detail");
+        if (mounted) pushError(t("agents_detail"), e instanceof Error ? e.message : "failed to load agent detail");
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [selectedId, selectedTerminal]);
+  }, [selectedId, selectedTerminal, pushError, t]);
 
   const filteredAgents = useMemo(() => {
     if (employmentFilter === "all") return agents;
@@ -123,7 +125,6 @@ export function AgentsPage(): JSX.Element {
     <section>
       <h2>{t("agents_title")}</h2>
       <p>{t("agents_subtitle")}</p>
-      {error ? <p className="error">{error}</p> : null}
 
       <div className="filter-row">
         <label>

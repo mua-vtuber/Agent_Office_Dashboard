@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { getSetting, setSetting, listSettings, putSettings } from "../storage/settings-repo";
+import { getMergedSettings } from "../services/settings-service";
 import { serializeError } from "../utils/logging";
 
 export async function registerSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/settings", async () => {
-    return { settings: listSettings(), server_ts: new Date().toISOString() };
+    return { settings: getMergedSettings(), server_ts: new Date().toISOString() };
   });
 
   app.get("/api/settings/:key", async (request, reply) => {
@@ -29,7 +30,7 @@ export async function registerSettingsRoutes(app: FastifyInstance): Promise<void
       const body = (request.body ?? {}) as { settings?: Record<string, unknown> };
       const settings = body.settings ?? {};
       putSettings(settings);
-      return { ok: true, settings: listSettings(), server_ts: new Date().toISOString() };
+      return { ok: true, settings: getMergedSettings(), server_ts: new Date().toISOString() };
     } catch (error) {
       app.log.error({ error: serializeError(error), request_id: request.id }, "failed to update settings");
       reply.code(500);

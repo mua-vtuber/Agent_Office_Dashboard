@@ -6,9 +6,11 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { useEffect, useMemo, useState } from "react";
 import { useWsStore } from "./stores/ws-store";
 import { ErrorBoundary } from "./components/layout/ErrorBoundary";
+import { ErrorModal } from "./components/layout/ErrorModal";
 import { useUiSettingsStore } from "./stores/ui-settings-store";
+import { useAppSettingsStore } from "./stores/app-settings-store";
 import { useTranslation } from "react-i18next";
-import { WS_URL, BACKEND_ORIGIN } from "./lib/constants";
+import { getBackendOrigin, getWsUrl } from "./lib/constants";
 
 type TerminalSession = {
   terminal_session_id: string;
@@ -23,6 +25,8 @@ export default function App(): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
+  const loadSettings = useAppSettingsStore((s) => s.load);
+  const settingsLoaded = useAppSettingsStore((s) => s.loaded);
   const { t, i18n } = useTranslation();
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
@@ -35,8 +39,13 @@ export default function App(): JSX.Element {
   ];
 
   useEffect(() => {
-    connect(WS_URL);
-  }, [connect]);
+    void loadSettings();
+  }, [loadSettings]);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    connect(getWsUrl());
+  }, [connect, settingsLoaded]);
 
   useEffect(() => {
     void i18n.changeLanguage(language);
@@ -50,14 +59,13 @@ export default function App(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const res = await fetch(`${BACKEND_ORIGIN}/api/sessions`);
+        const res = await fetch(`${getBackendOrigin()}/api/sessions`);
         const json = (await res.json()) as { terminals?: TerminalSession[]; scopes?: Array<{ terminal_session_id: string; workspace_id: string; last_event_ts: string }> };
         if (!mounted) return;
         if (Array.isArray(json.terminals)) {
           setTerminals(json.terminals);
           return;
         }
-        // Backward-compatible fallback if backend has not been updated yet.
         if (Array.isArray(json.scopes)) {
           const byTerminal = new Map<string, TerminalSession>();
           for (const scope of json.scopes) {
@@ -90,7 +98,6 @@ export default function App(): JSX.Element {
     const params = new URLSearchParams(searchParams);
     if (terminalSessionId) params.set("terminal_session_id", terminalSessionId);
     else params.delete("terminal_session_id");
-    // UI scope is terminal-only. Drop legacy query params to avoid confusion.
     params.delete("workspace_id");
     params.delete("run_id");
     setSearchParams(params);
@@ -98,6 +105,7 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app-shell">
+      <ErrorModal />
       <header className="topbar">
         <div className="topbar-main">
           <h1>{t("app_title")}</h1>

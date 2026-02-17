@@ -9,9 +9,9 @@ import {
   listTerminalSessions
 } from "../storage/events-repo";
 import { listStatesScoped } from "../storage/state-repo";
-import { listActiveTasks } from "../storage/tasks-repo";
+import { listActiveTasks, listTasksScoped } from "../storage/tasks-repo";
 import { listAllSessions } from "../storage/sessions-repo";
-import { listSettingsObject } from "../storage/settings-repo";
+import { getMergedSettings } from "../services/settings-service";
 import { config } from "../config";
 
 function scopeFilter(query: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): {
@@ -33,9 +33,9 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
 
     return {
       agents: listStatesScoped(filter),
-      tasks: listActiveTasks(),
+      tasks: listTasksScoped(filter),
       sessions: listAllSessions(),
-      settings: listSettingsObject(),
+      settings: getMergedSettings(),
       recent_events: listEventsScoped(100, filter),
       server_ts: new Date().toISOString(),
     };
@@ -48,7 +48,7 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
 
   app.get("/api/sessions", async () => {
     const scopes = listScopes();
-    const terminals = listTerminalSessions();
+    const terminals = listTerminalSessions({ onlyActive: true });
     if (scopes.length === 0) {
       return {
         scopes: [

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
-import { BACKEND_ORIGIN } from "../lib/constants";
-import { authFetch } from "../lib/api";
+import { useTaskStore } from "../stores/task-store";
+import { getBackendOrigin } from "../lib/constants";
+import { useErrorStore } from "../stores/error-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { AlertPanel } from "../components/dashboard/AlertPanel";
+import { ActiveTaskList } from "../components/dashboard/ActiveTaskList";
 
 type SnapshotAgent = {
   agent_id: string;
@@ -83,7 +86,7 @@ export function DashboardPage(): JSX.Element {
   const agentsMap = useAgentStore((s) => s.agents);
   const setManyAgents = useAgentStore((s) => s.setMany);
 
-  const [error, setError] = useState<string>("");
+  const pushError = useErrorStore((s) => s.push);
   const [integration, setIntegration] = useState<IntegrationStatus | null>(null);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string>("");
@@ -102,26 +105,18 @@ export function DashboardPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
+        const origin = getBackendOrigin();
         const suffix = buildSuffix();
 
-        const [eventsRes, snapshotRes, integrationRes, settingsRes] = await Promise.all([
-          authFetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
-          authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          authFetch(`${BACKEND_ORIGIN}/api/integration/status`),
-          authFetch(`${BACKEND_ORIGIN}/api/settings/app`),
+        const [eventsRes, snapshotRes, integrationRes] = await Promise.all([
+          fetch(`${origin}/api/events${suffix}`),
+          fetch(`${origin}/api/snapshot${suffix}`),
+          fetch(`${origin}/api/integration/status`)
         ]);
 
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
         const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
         const integrationJson = (await integrationRes.json()) as IntegrationStatus;
-
-        if (settingsRes.ok) {
-          const settingsJson = (await settingsRes.json()) as { value?: { operations?: { snapshot_sync_interval_sec?: number } } };
-          const interval = settingsJson.value?.operations?.snapshot_sync_interval_sec;
-          if (typeof interval === "number" && interval >= 5) {
-            syncIntervalRef.current = interval;
-          }
-        }
 
         if (!mounted) return;
 
@@ -143,23 +138,24 @@ export function DashboardPage(): JSX.Element {
         if (Array.isArray(snapshotJson.tasks)) setTasks(snapshotJson.tasks);
         setIntegration(integrationJson);
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "failed to load dashboard");
+        if (mounted) pushError(t("dashboard_title"), e instanceof Error ? e.message : "failed to load dashboard");
       }
     })();
 
     return () => {
       mounted = false;
     };
-  }, [setAllEvents, setManyAgents, buildSuffix]);
+  }, [setAllEvents, setManyAgents, buildSuffix, pushError, t]);
 
-  // Periodic snapshot resync (#15)
+  // Periodic snapshot resync
   useEffect(() => {
     const intervalId = window.setInterval(async () => {
       try {
+        const origin = getBackendOrigin();
         const suffix = buildSuffix();
         const [snapshotRes, eventsRes] = await Promise.all([
-          authFetch(`${BACKEND_ORIGIN}/api/snapshot${suffix}`),
-          authFetch(`${BACKEND_ORIGIN}/api/events${suffix}`),
+          fetch(`${origin}/api/snapshot${suffix}`),
+          fetch(`${origin}/api/events${suffix}`),
         ]);
         const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
         const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
@@ -177,7 +173,7 @@ export function DashboardPage(): JSX.Element {
         if (Array.isArray(snapshotJson.tasks)) setTasks(snapshotJson.tasks);
         if (Array.isArray(eventsJson.events)) setAllEvents(eventsJson.events);
       } catch {
-        // silent — WS and next tick will retry
+        // silent -- WS and next tick will retry
       }
     }, syncIntervalRef.current * 1000);
 
@@ -190,12 +186,13 @@ export function DashboardPage(): JSX.Element {
     setLoadingContext(true);
     void (async () => {
       try {
+        const origin = getBackendOrigin();
         const encoded = encodeURIComponent(selectedEventId);
-        const res = await authFetch(`${BACKEND_ORIGIN}/api/events/${encoded}/context?before=8&after=8`);
+        const res = await fetch(`${origin}/api/events/${encoded}/context?before=8&after=8`);
         const json = (await res.json()) as EventContext;
         if (mounted) setContext(json);
       } catch (e) {
-        if (mounted) setError(e instanceof Error ? e.message : "failed to load event context");
+        if (mounted) pushError(t("dashboard_time_travel_title"), e instanceof Error ? e.message : "failed to load event context");
       } finally {
         if (mounted) setLoadingContext(false);
       }
@@ -203,21 +200,27 @@ export function DashboardPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [selectedEventId]);
+  }, [selectedEventId, pushError, t]);
 
   const agents = useMemo(() => Object.values(agentsMap), [agentsMap]);
+  const tasksMap = useTaskStore((s) => s.tasks);
+  const activeTaskCount = useMemo(
+    () => Object.values(tasksMap).filter((t) => t.status === "active").length,
+    [tasksMap]
+  );
 
   return (
     <section>
       <h2>{t("dashboard_title")}</h2>
       <p>{t("dashboard_subtitle")}</p>
-      {error ? <p className="error">{error}</p> : null}
       {integration && !integration.hooks_configured ? (
         <div className="hooks-banner">
           {t("dashboard_hooks_missing", { mode: integration.mode })}
           <Link to="/settings"> {t("dashboard_open_settings")}</Link>
         </div>
       ) : null}
+
+      <AlertPanel />
 
       <div className="stats-grid">
         <article className="stat-card">
@@ -231,6 +234,10 @@ export function DashboardPage(): JSX.Element {
         <article className="stat-card">
           <div className="stat-label">{t("dashboard_stat_working")}</div>
           <div className="stat-value">{agents.filter((a) => a.status === "working" || a.status === "meeting").length}</div>
+        </article>
+        <article className="stat-card">
+          <div className="stat-label">{t("dashboard_stat_active_tasks")}</div>
+          <div className="stat-value">{activeTaskCount}</div>
         </article>
         <article className="stat-card">
           <div className="stat-label">{t("dashboard_stat_events")}</div>
@@ -258,33 +265,7 @@ export function DashboardPage(): JSX.Element {
         )}
       </div>
 
-      <h3>{t("dashboard_active_tasks")}</h3>
-      {tasks.filter((tk) => tk.status === "started" || tk.status === "created").length === 0 ? (
-        <p>{t("dashboard_tasks_empty")}</p>
-      ) : (
-        <table className="tasks-table">
-          <thead>
-            <tr>
-              <th>Task ID</th>
-              <th>{t("common_assignee")}</th>
-              <th>{t("common_elapsed")}</th>
-              <th>{t("common_status")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tasks
-              .filter((tk) => tk.status === "started" || tk.status === "created")
-              .map((task) => (
-                <tr key={task.id}>
-                  <td>{task.title || task.id}</td>
-                  <td>{task.assignee_id ?? "-"}</td>
-                  <td>{elapsedSince(task.created_at)}</td>
-                  <td><span className={`badge ${task.status === "started" ? "good" : "neutral"}`}>{task.status}</span></td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      )}
+      <ActiveTaskList />
 
       <div className="split-layout">
         <article className="panel">

@@ -4,6 +4,11 @@ import { z } from "zod";
 
 const pointSchema = z.object({ x: z.number(), y: z.number() });
 
+export const seatPositionSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
 const meetingSpotSchema = z.object({
   id: z.string().min(1),
   x: z.number(),
@@ -37,6 +42,12 @@ const thoughtBubbleSchema = z.object({
   translation: translationSettingsSchema,
 });
 
+export const transitionRuleSchema = z.object({
+  from: z.string(),
+  event: z.string(),
+  to: z.string(),
+});
+
 // --- Settings schema (settings-spec.md §2) ---
 
 export const settingsSchema = z.object({
@@ -59,8 +70,8 @@ export const settingsSchema = z.object({
   /** §2.3 Office Layout */
   office_layout: z.object({
     layout_profile: z.string().min(1),
-    seat_positions: z.record(z.string(), pointSchema),
-    meeting_spots: z.array(meetingSpotSchema).min(1),
+    seat_positions: z.record(z.string(), seatPositionSchema).optional(),
+    meeting_spots: z.record(z.string(), seatPositionSchema).optional(),
     pantry_zone_enabled: z.boolean(),
     pantry_door_lane: boundsSchema,
     speech_bubble_enabled: z.boolean(),
@@ -111,9 +122,14 @@ export const settingsSchema = z.object({
 
   /** §2.8 Thought Bubble */
   thought_bubble: thoughtBubbleSchema,
+
+  /** Dynamic transition rules (optional, from incoming) */
+  transition_rules: z.array(transitionRuleSchema).optional(),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
+export type SeatPosition = z.infer<typeof seatPositionSchema>;
+export type TransitionRule = z.infer<typeof transitionRuleSchema>;
 
 // --- Default values (settings-spec.md §3) ---
 
@@ -133,7 +149,7 @@ export const defaultSettings: Settings = {
   office_layout: {
     layout_profile: "kr_t_left_v2",
     seat_positions: {},
-    meeting_spots: [{ id: "m1", x: 40, y: 48 }],
+    meeting_spots: {},
     pantry_zone_enabled: true,
     pantry_door_lane: { x_min: 64, x_max: 78, y_min: 84, y_max: 96 },
     speech_bubble_enabled: true,

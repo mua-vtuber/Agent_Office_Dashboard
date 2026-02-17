@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
-import { BACKEND_ORIGIN } from "../lib/constants";
-import { authFetch } from "../lib/api";
+import { getBackendOrigin } from "../lib/constants";
 import { useUiSettingsStore } from "../stores/ui-settings-store";
+import { useErrorStore } from "../stores/error-store";
 import { useTranslation } from "react-i18next";
+import { ConnectionSettings } from "../components/settings/ConnectionSettings";
+import { SeatEditor } from "../components/settings/SeatEditor";
+import { TransitionRulesEditor } from "../components/settings/TransitionRulesEditor";
+import { OperationsSettings } from "../components/settings/OperationsSettings";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
@@ -60,6 +64,7 @@ export function SettingsPage(): JSX.Element {
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
   const setAllUi = useUiSettingsStore((s) => s.setAll);
+  const pushError = useErrorStore((s) => s.push);
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
   const [globalResult, setGlobalResult] = useState<GlobalInstallResult | null>(null);
@@ -70,7 +75,6 @@ export function SettingsPage(): JSX.Element {
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const [error, setError] = useState<string>("");
 
   // Thought bubble settings
   const [tbForm, setTbForm] = useState<ThoughtBubbleForm>(THOUGHT_BUBBLE_DEFAULTS);
@@ -81,11 +85,12 @@ export function SettingsPage(): JSX.Element {
 
   const refreshStatus = async (): Promise<void> => {
     try {
-      const res = await authFetch(`${BACKEND_ORIGIN}/api/integration/status`);
+      const origin = getBackendOrigin();
+      const res = await fetch(`${origin}/api/integration/status`);
       const json = (await res.json()) as IntegrationStatus;
       setStatus(json);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "failed to load integration status");
+      pushError(t("settings_hooks_title"), e instanceof Error ? e.message : "failed to load integration status");
     }
   };
 
@@ -93,7 +98,8 @@ export function SettingsPage(): JSX.Element {
   useEffect(() => {
     void (async () => {
       try {
-        const res = await authFetch(`${BACKEND_ORIGIN}/api/settings/app`);
+        const origin = getBackendOrigin();
+        const res = await fetch(`${origin}/api/settings/app`);
         if (res.ok) {
           const json = (await res.json()) as { value?: { thought_bubble?: ThoughtBubbleForm } };
           if (json.value?.thought_bubble) {
@@ -112,18 +118,21 @@ export function SettingsPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const res = await fetch(`${BACKEND_ORIGIN}/api/settings`);
+        const origin = getBackendOrigin();
+        const res = await fetch(`${origin}/api/settings`);
         const json = (await res.json()) as {
           settings?: {
             ui_language?: "ko" | "en";
             ui_motion?: "low" | "normal" | "high";
             layout_profile?: string;
+            general?: { language?: "ko" | "en" };
+            office_layout?: { layout_profile?: string };
           };
         };
         if (!mounted) return;
-        const serverLanguage = json.settings?.ui_language ?? language;
+        const serverLanguage = json.settings?.ui_language ?? json.settings?.general?.language ?? language;
         const serverMotion = json.settings?.ui_motion ?? motion;
-        const serverLayout = json.settings?.layout_profile ?? "kr_t_left_v2";
+        const serverLayout = json.settings?.layout_profile ?? json.settings?.office_layout?.layout_profile ?? "kr_t_left_v2";
         setAllUi({ language: serverLanguage, motion: serverMotion });
         void i18n.changeLanguage(serverLanguage);
         setDraftLanguage(serverLanguage);
@@ -132,7 +141,7 @@ export function SettingsPage(): JSX.Element {
         setLoaded(true);
       } catch (e) {
         if (mounted) {
-          setError(e instanceof Error ? e.message : "failed to load settings");
+          pushError(t("settings_title"), e instanceof Error ? e.message : "failed to load settings");
           setLoaded(true);
         }
       }
@@ -140,14 +149,14 @@ export function SettingsPage(): JSX.Element {
     return () => {
       mounted = false;
     };
-  }, [i18n, language, loaded, motion, setAllUi]);
+  }, [i18n, language, loaded, motion, setAllUi, pushError, t]);
 
   const saveSettings = async (): Promise<void> => {
     setSaving(true);
     setSaveMessage("");
-    setError("");
     try {
-      const res = await fetch(`${BACKEND_ORIGIN}/api/settings`, {
+      const origin = getBackendOrigin();
+      const res = await fetch(`${origin}/api/settings`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -166,7 +175,7 @@ export function SettingsPage(): JSX.Element {
       void i18n.changeLanguage(draftLanguage);
       setSaveMessage(t("settings_saved"));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "failed to save settings");
+      pushError(t("settings_title"), e instanceof Error ? e.message : "failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -175,9 +184,9 @@ export function SettingsPage(): JSX.Element {
   const installGlobalHooks = async (): Promise<void> => {
     setGlobalInstalling(true);
     setGlobalResult(null);
-    setError("");
     try {
-      const res = await fetch(`${BACKEND_ORIGIN}/api/integration/hooks/install-global`, {
+      const origin = getBackendOrigin();
+      const res = await fetch(`${origin}/api/integration/hooks/install-global`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}"
@@ -194,7 +203,7 @@ export function SettingsPage(): JSX.Element {
       setGlobalResult(normalized);
       await refreshStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "failed to install global hooks");
+      pushError(t("settings_global_hooks_title"), e instanceof Error ? e.message : "failed to install global hooks");
     } finally {
       setGlobalInstalling(false);
     }
@@ -203,7 +212,8 @@ export function SettingsPage(): JSX.Element {
   const installHooks = async (mode: "guide" | "write"): Promise<void> => {
     setInstallResult(null);
     try {
-      const res = await authFetch(`${BACKEND_ORIGIN}/api/integration/hooks/install`, {
+      const origin = getBackendOrigin();
+      const res = await fetch(`${origin}/api/integration/hooks/install`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode })
@@ -212,15 +222,16 @@ export function SettingsPage(): JSX.Element {
       setInstallResult(json);
       await refreshStatus();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "failed to install hooks");
+      pushError(t("settings_hooks_title"), e instanceof Error ? e.message : "failed to install hooks");
     }
   };
 
   const saveThoughtBubble = async (): Promise<void> => {
     setTbSaveMsg("");
     try {
+      const origin = getBackendOrigin();
       // Fetch current full settings, then merge thought_bubble
-      const currentRes = await authFetch(`${BACKEND_ORIGIN}/api/settings/app`);
+      const currentRes = await fetch(`${origin}/api/settings/app`);
       if (!currentRes.ok) {
         setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: `HTTP ${currentRes.status}` }));
         return;
@@ -228,7 +239,7 @@ export function SettingsPage(): JSX.Element {
       const currentJson = (await currentRes.json()) as { value?: Record<string, unknown> };
       const merged = { ...currentJson.value, thought_bubble: tbForm };
 
-      const res = await authFetch(`${BACKEND_ORIGIN}/api/settings/app`, {
+      const res = await fetch(`${origin}/api/settings/app`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ value: merged }),
@@ -291,7 +302,6 @@ export function SettingsPage(): JSX.Element {
 
         <article className="panel">
           <h3>{t("settings_hooks_title")}</h3>
-          {error ? <p className="error">{error}</p> : null}
           {!status ? (
             <p>{t("settings_status_checking")}</p>
           ) : (
@@ -430,6 +440,16 @@ export function SettingsPage(): JSX.Element {
           {tbSaveMsg ? <span style={{ marginLeft: "0.5rem" }}>{tbSaveMsg}</span> : null}
         </div>
       </article>
+
+      <div className="split-layout" style={{ marginTop: "14px" }}>
+        <ConnectionSettings />
+        <OperationsSettings />
+      </div>
+
+      <div className="split-layout" style={{ marginTop: "14px" }}>
+        <SeatEditor />
+        <TransitionRulesEditor />
+      </div>
     </section>
   );
 }

@@ -1,7 +1,8 @@
 import { WebSocketServer } from "ws";
 import { listEvents } from "../storage/events-repo";
 import { listStates } from "../storage/state-repo";
-import { listSettingsObject } from "../storage/settings-repo";
+import { listActiveTasks } from "../storage/tasks-repo";
+import { getMergedSettings } from "../services/settings-service";
 
 type WsClient = {
   readyState: number;
@@ -26,9 +27,9 @@ function sendJson(client: WsClient, message: unknown): void {
 function snapshotPayload(): Record<string, unknown> {
   return {
     agents: listStates(),
-    tasks: [],
+    tasks: listActiveTasks(),
     sessions: [],
-    settings: listSettingsObject(),
+    settings: getMergedSettings(),
     recent_events: listEvents(100),
     server_ts: new Date().toISOString(),
   };
