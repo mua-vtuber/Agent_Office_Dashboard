@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, type AppSettings } from "./settings-defaults";
+import { defaultSettings, type Settings } from "@aod/shared-schema";
 import { listSettingsObject } from "../storage/settings-repo";
 
 /**
@@ -27,10 +27,10 @@ export function deepMerge(base: Record<string, unknown>, overrides: Record<strin
 }
 
 /**
- * Returns the full settings object: DEFAULT_SETTINGS deep-merged with user overrides from DB.
+ * Returns the full settings object: defaultSettings deep-merged with user overrides from DB.
  */
-export function getMergedSettings(): AppSettings {
+export function getMergedSettings(): Settings {
   const overrides = listSettingsObject();
-  const base: Record<string, unknown> = { ...DEFAULT_SETTINGS } as unknown as Record<string, unknown>;
-  return deepMerge(base, overrides) as unknown as AppSettings;
+  const base: Record<string, unknown> = { ...defaultSettings } as unknown as Record<string, unknown>;
+  return deepMerge(base, overrides) as unknown as Settings;
 }

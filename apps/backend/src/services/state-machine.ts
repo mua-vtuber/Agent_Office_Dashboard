@@ -1,6 +1,5 @@
 import type { NormalizedEvent, AgentStatus, Settings } from "@aod/shared-schema";
-import { defaultSettings } from "@aod/shared-schema";
-import { getSetting } from "../storage/settings-repo";
+import { getMergedSettings } from "./settings-service";
 
 // --- TransitionContext ---
 
@@ -138,7 +137,7 @@ export function resolvePostComplete(settings: Settings): AgentStatus {
 // --- Settings helper ---
 
 function getAppSettings(): Settings {
-  return getSetting<Settings>("app") ?? defaultSettings;
+  return getMergedSettings();
 }
 
 export { getAppSettings };

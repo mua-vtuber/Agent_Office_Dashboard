@@ -1,39 +1,9 @@
 import { create } from "zustand";
+import type { Settings } from "@aod/shared-schema";
 import { apiGet, apiPut } from "../lib/api";
 import { useErrorStore } from "./error-store";
 
-export type SeatPosition = { x: number; y: number };
-export type TransitionRule = { from: string; event: string; to: string };
-
-export type AppSettings = {
-  general: {
-    language: "ko" | "en";
-    timezone: string;
-    date_format: "relative" | "absolute";
-    theme: string;
-    animation_speed: "slow" | "normal" | "fast";
-  };
-  office_layout: {
-    layout_profile: string;
-    pantry_zone_enabled: boolean;
-    seat_positions: Record<string, SeatPosition>;
-    meeting_spots: Record<string, SeatPosition>;
-  };
-  operations: {
-    idle_to_breakroom_seconds: number;
-    idle_to_resting_seconds: number;
-    pending_input_alert_seconds: number;
-    failed_alert_seconds: number;
-    stale_agent_seconds: number;
-    failure_alert_enabled: boolean;
-    snapshot_sync_interval_sec: number;
-  };
-  connection: {
-    api_base_url: string;
-    ws_url: string;
-  };
-  transition_rules: TransitionRule[];
-};
+export type { SeatPosition, TransitionRule } from "@aod/shared-schema";
 
 const CONNECTION_STORAGE_KEY = "aod.connection.v1";
 
@@ -56,7 +26,7 @@ function saveConnectionToStorage(connection: { api_base_url: string; ws_url: str
 }
 
 type AppSettingsStore = {
-  settings: AppSettings | null;
+  settings: Settings | null;
   loaded: boolean;
   error: string | null;
   load: () => Promise<void>;
@@ -75,7 +45,7 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
 
   load: async () => {
     try {
-      const json = await apiGet<{ settings?: AppSettings }>("/api/settings");
+      const json = await apiGet<{ settings?: Settings }>("/api/settings");
       if (json.settings) {
         set({ settings: json.settings, loaded: true, error: null });
         if (json.settings.connection) {
@@ -93,7 +63,7 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
 
   update: async (partial) => {
     try {
-      const json = await apiPut<{ ok?: boolean; settings?: AppSettings }>("/api/settings", { settings: partial });
+      const json = await apiPut<{ ok?: boolean; settings?: Settings }>("/api/settings", { settings: partial });
       if (json.settings) {
         set({ settings: json.settings, error: null });
         if (json.settings.connection) {
