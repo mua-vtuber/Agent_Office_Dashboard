@@ -9,7 +9,7 @@ import {
   listTerminalSessions
 } from "../storage/events-repo";
 import { listStatesScoped } from "../storage/state-repo";
-import { listActiveTasks, listTasksScoped } from "../storage/tasks-repo";
+import { listTasksScoped } from "../storage/tasks-repo";
 import { listAllSessions } from "../storage/sessions-repo";
 import { getMergedSettings } from "../services/settings-service";
 import { config } from "../config";
@@ -48,7 +48,7 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
 
   app.get("/api/sessions", async () => {
     const scopes = listScopes();
-    const terminals = listTerminalSessions({ onlyActive: true });
+    const terminals = listTerminalSessions();
     if (scopes.length === 0) {
       return {
         scopes: [

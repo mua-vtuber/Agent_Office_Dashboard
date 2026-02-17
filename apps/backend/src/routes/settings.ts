@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { getSetting, setSetting, listSettings, putSettings } from "../storage/settings-repo";
+import { getSetting, setSetting, putSettings } from "../storage/settings-repo";
 import { getMergedSettings } from "../services/settings-service";
 import { serializeError } from "../utils/logging";
 
