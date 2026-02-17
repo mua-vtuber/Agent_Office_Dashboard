@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Application, Container, Graphics, Text } from "pixi.js";
-import { getBackendOrigin } from "../lib/constants";
+import { apiGet } from "../lib/api";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
 import { useAppSettingsStore } from "../stores/app-settings-store";
 import { useErrorStore } from "../stores/error-store";
@@ -324,19 +324,17 @@ export function OfficePage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
-        const [snapshotRes, settingsRes] = await Promise.all([
-          fetch(`${origin}/api/snapshot${suffix}`),
-          fetch(`${origin}/api/settings/app`),
+        const [snapshotJson, settingsJson] = await Promise.all([
+          apiGet<{ agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }> }>(`/api/snapshot${suffix}`),
+          apiGet<{ value?: { operations?: { move_speed_px_per_sec?: number }; thought_bubble?: { enabled?: boolean; max_length?: number } } }>("/api/settings/app").catch(() => null),
         ]);
 
-        const json = (await snapshotRes.json()) as { agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }> };
-        if (mounted && Array.isArray(json.agents)) {
-          setManyAgents(json.agents.map((a) => ({
+        if (mounted && Array.isArray(snapshotJson.agents)) {
+          setManyAgents(snapshotJson.agents.map((a) => ({
             agent_id: a.agent_id,
             status: a.status,
             thinking: a.thinking_text ?? null,
@@ -344,16 +342,10 @@ export function OfficePage(): JSX.Element {
           })));
         }
 
-        if (settingsRes.ok) {
-          const sJson = (await settingsRes.json()) as {
-            value?: {
-              operations?: { move_speed_px_per_sec?: number };
-              thought_bubble?: { enabled?: boolean; max_length?: number };
-            };
-          };
-          const speed = sJson.value?.operations?.move_speed_px_per_sec;
+        if (settingsJson) {
+          const speed = settingsJson.value?.operations?.move_speed_px_per_sec;
           if (typeof speed === "number" && speed >= 30) moveSpeedRef.current = speed;
-          const tb = sJson.value?.thought_bubble;
+          const tb = settingsJson.value?.thought_bubble;
           if (tb) {
             tbConfigRef.current = {
               enabled: tb.enabled ?? true,
@@ -381,16 +373,17 @@ export function OfficePage(): JSX.Element {
     setFocusedEventsLoading(true);
     void (async () => {
       try {
-        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
         const encoded = encodeURIComponent(focusedAgentId);
-        const res = await fetch(`${origin}/api/agents/${encoded}${suffix}`);
-        const json = (await res.json()) as { agent?: { recent_events?: RecentEvent[] } };
+        const json = await apiGet<{ agent?: { recent_events?: RecentEvent[] } }>(`/api/agents/${encoded}${suffix}`);
         if (mounted) setFocusedRecentEvents((json.agent?.recent_events ?? []).slice(0, 3));
-      } catch {
-        if (mounted) setFocusedRecentEvents([]);
+      } catch (e) {
+        if (mounted) {
+          pushError(t("office_focus_title"), e instanceof Error ? e.message : "failed to load agent events");
+          setFocusedRecentEvents([]);
+        }
       } finally {
         if (mounted) setFocusedEventsLoading(false);
       }

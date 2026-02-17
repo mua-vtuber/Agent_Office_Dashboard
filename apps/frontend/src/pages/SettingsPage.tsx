@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getBackendOrigin } from "../lib/constants";
+import { apiGet, apiPost, apiPut } from "../lib/api";
 import { useUiSettingsStore } from "../stores/ui-settings-store";
 import { useErrorStore } from "../stores/error-store";
 import { useTranslation } from "react-i18next";
@@ -85,9 +85,7 @@ export function SettingsPage(): JSX.Element {
 
   const refreshStatus = async (): Promise<void> => {
     try {
-      const origin = getBackendOrigin();
-      const res = await fetch(`${origin}/api/integration/status`);
-      const json = (await res.json()) as IntegrationStatus;
+      const json = await apiGet<IntegrationStatus>("/api/integration/status");
       setStatus(json);
     } catch (e) {
       pushError(t("settings_hooks_title"), e instanceof Error ? e.message : "failed to load integration status");
@@ -98,29 +96,23 @@ export function SettingsPage(): JSX.Element {
   useEffect(() => {
     void (async () => {
       try {
-        const origin = getBackendOrigin();
-        const res = await fetch(`${origin}/api/settings/app`);
-        if (res.ok) {
-          const json = (await res.json()) as { value?: { thought_bubble?: ThoughtBubbleForm } };
-          if (json.value?.thought_bubble) {
-            setTbForm(json.value.thought_bubble);
-          }
+        const json = await apiGet<{ value?: { thought_bubble?: ThoughtBubbleForm } }>("/api/settings/app");
+        if (json.value?.thought_bubble) {
+          setTbForm(json.value.thought_bubble);
         }
-      } catch {
-        // use defaults
+      } catch (e) {
+        pushError(t("settings_thought_bubble_title"), e instanceof Error ? e.message : "failed to load thought bubble settings");
       }
     })();
     void refreshStatus();
-  }, []);
+  }, [pushError, t]);
 
   useEffect(() => {
     if (loaded) return;
     let mounted = true;
     void (async () => {
       try {
-        const origin = getBackendOrigin();
-        const res = await fetch(`${origin}/api/settings`);
-        const json = (await res.json()) as {
+        const json = await apiGet<{
           settings?: {
             ui_language?: "ko" | "en";
             ui_motion?: "low" | "normal" | "high";
@@ -128,7 +120,7 @@ export function SettingsPage(): JSX.Element {
             general?: { language?: "ko" | "en" };
             office_layout?: { layout_profile?: string };
           };
-        };
+        }>("/api/settings");
         if (!mounted) return;
         const serverLanguage = json.settings?.ui_language ?? json.settings?.general?.language ?? language;
         const serverMotion = json.settings?.ui_motion ?? motion;
@@ -155,20 +147,14 @@ export function SettingsPage(): JSX.Element {
     setSaving(true);
     setSaveMessage("");
     try {
-      const origin = getBackendOrigin();
-      const res = await fetch(`${origin}/api/settings`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          settings: {
-            ui_language: draftLanguage,
-            ui_motion: draftMotion,
-            layout_profile: draftLayoutProfile
-          }
-        })
+      const json = await apiPut<{ ok?: boolean }>("/api/settings", {
+        settings: {
+          ui_language: draftLanguage,
+          ui_motion: draftMotion,
+          layout_profile: draftLayoutProfile
+        }
       });
-      const json = (await res.json()) as { ok?: boolean };
-      if (!res.ok || !json.ok) {
+      if (!json.ok) {
         throw new Error("failed to save settings");
       }
       setAllUi({ language: draftLanguage, motion: draftMotion });
@@ -185,13 +171,7 @@ export function SettingsPage(): JSX.Element {
     setGlobalInstalling(true);
     setGlobalResult(null);
     try {
-      const origin = getBackendOrigin();
-      const res = await fetch(`${origin}/api/integration/hooks/install-global`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: "{}"
-      });
-      const raw = (await res.json()) as GlobalInstallResult;
+      const raw = await apiPost<GlobalInstallResult>("/api/integration/hooks/install-global", {});
       const normalized: GlobalInstallResult = {
         ok: Boolean(raw?.ok),
         backup: raw?.backup ?? null,
@@ -212,13 +192,7 @@ export function SettingsPage(): JSX.Element {
   const installHooks = async (mode: "guide" | "write"): Promise<void> => {
     setInstallResult(null);
     try {
-      const origin = getBackendOrigin();
-      const res = await fetch(`${origin}/api/integration/hooks/install`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode })
-      });
-      const json = (await res.json()) as InstallResult;
+      const json = await apiPost<InstallResult>("/api/integration/hooks/install", { mode });
       setInstallResult(json);
       await refreshStatus();
     } catch (e) {
@@ -229,26 +203,10 @@ export function SettingsPage(): JSX.Element {
   const saveThoughtBubble = async (): Promise<void> => {
     setTbSaveMsg("");
     try {
-      const origin = getBackendOrigin();
-      // Fetch current full settings, then merge thought_bubble
-      const currentRes = await fetch(`${origin}/api/settings/app`);
-      if (!currentRes.ok) {
-        setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: `HTTP ${currentRes.status}` }));
-        return;
-      }
-      const currentJson = (await currentRes.json()) as { value?: Record<string, unknown> };
+      const currentJson = await apiGet<{ value?: Record<string, unknown> }>("/api/settings/app");
       const merged = { ...currentJson.value, thought_bubble: tbForm };
-
-      const res = await fetch(`${origin}/api/settings/app`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ value: merged }),
-      });
-      if (res.ok) {
-        setTbSaveMsg(t("settings_thought_bubble_save_ok"));
-      } else {
-        setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: `HTTP ${res.status}` }));
-      }
+      await apiPut("/api/settings/app", { value: merged });
+      setTbSaveMsg(t("settings_thought_bubble_save_ok"));
     } catch (e) {
       setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: e instanceof Error ? e.message : "unknown" }));
     }

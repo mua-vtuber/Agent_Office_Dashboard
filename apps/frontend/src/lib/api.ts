@@ -1,24 +1,39 @@
-import { AUTH_TOKEN, BACKEND_ORIGIN } from "./constants";
+import { AUTH_TOKEN, getBackendOrigin } from "./constants";
 
-export function authHeaders(): Record<string, string> {
-  if (!AUTH_TOKEN) return {};
-  return { Authorization: `Bearer ${AUTH_TOKEN}` };
-}
-
-export function authFetch(input: string, init?: RequestInit): Promise<Response> {
+/**
+ * Authenticated fetch wrapper.
+ * Prepends backend origin, injects Authorization header, throws on non-ok.
+ */
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   if (AUTH_TOKEN) headers.set("Authorization", `Bearer ${AUTH_TOKEN}`);
-  return fetch(input, { ...init, headers });
+  const res = await fetch(`${getBackendOrigin()}${path}`, { ...init, headers });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res;
 }
 
-export async function fetchSnapshot(): Promise<unknown> {
-  const res = await authFetch(`${BACKEND_ORIGIN}/api/snapshot`);
-  if (!res.ok) throw new Error("failed to fetch snapshot");
-  return res.json();
+export async function apiGet<T>(path: string): Promise<T> {
+  const res = await apiFetch(path);
+  return res.json() as Promise<T>;
 }
 
-export async function fetchAgents(): Promise<unknown> {
-  const res = await authFetch(`${BACKEND_ORIGIN}/api/agents`);
-  if (!res.ok) throw new Error("failed to fetch agents");
-  return res.json();
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const res = await apiFetch(path, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json() as Promise<T>;
+}
+
+export async function apiPost<T>(path: string, body: unknown): Promise<T> {
+  const res = await apiFetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json() as Promise<T>;
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEventStore } from "../stores/event-store";
 import { useAgentStore } from "../stores/agent-store";
 import { useTaskStore } from "../stores/task-store";
-import { getBackendOrigin } from "../lib/constants";
+import { apiGet } from "../lib/api";
 import { useErrorStore } from "../stores/error-store";
 import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -105,18 +105,13 @@ export function DashboardPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const origin = getBackendOrigin();
         const suffix = buildSuffix();
 
-        const [eventsRes, snapshotRes, integrationRes] = await Promise.all([
-          fetch(`${origin}/api/events${suffix}`),
-          fetch(`${origin}/api/snapshot${suffix}`),
-          fetch(`${origin}/api/integration/status`)
+        const [eventsJson, snapshotJson, integrationJson] = await Promise.all([
+          apiGet<{ events?: EventRow[] }>(`/api/events${suffix}`),
+          apiGet<{ agents?: SnapshotAgent[]; tasks?: TaskRow[] }>(`/api/snapshot${suffix}`),
+          apiGet<IntegrationStatus>("/api/integration/status"),
         ]);
-
-        const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
-        const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
-        const integrationJson = (await integrationRes.json()) as IntegrationStatus;
 
         if (!mounted) return;
 
@@ -151,14 +146,11 @@ export function DashboardPage(): JSX.Element {
   useEffect(() => {
     const intervalId = window.setInterval(async () => {
       try {
-        const origin = getBackendOrigin();
         const suffix = buildSuffix();
-        const [snapshotRes, eventsRes] = await Promise.all([
-          fetch(`${origin}/api/snapshot${suffix}`),
-          fetch(`${origin}/api/events${suffix}`),
+        const [snapshotJson, eventsJson] = await Promise.all([
+          apiGet<{ agents?: SnapshotAgent[]; tasks?: TaskRow[] }>(`/api/snapshot${suffix}`),
+          apiGet<{ events?: EventRow[] }>(`/api/events${suffix}`),
         ]);
-        const snapshotJson = (await snapshotRes.json()) as { agents?: SnapshotAgent[]; tasks?: TaskRow[] };
-        const eventsJson = (await eventsRes.json()) as { events?: EventRow[] };
 
         if (Array.isArray(snapshotJson.agents)) {
           setManyAgents(
@@ -186,10 +178,8 @@ export function DashboardPage(): JSX.Element {
     setLoadingContext(true);
     void (async () => {
       try {
-        const origin = getBackendOrigin();
         const encoded = encodeURIComponent(selectedEventId);
-        const res = await fetch(`${origin}/api/events/${encoded}/context?before=8&after=8`);
-        const json = (await res.json()) as EventContext;
+        const json = await apiGet<EventContext>(`/api/events/${encoded}/context?before=8&after=8`);
         if (mounted) setContext(json);
       } catch (e) {
         if (mounted) pushError(t("dashboard_time_travel_title"), e instanceof Error ? e.message : "failed to load event context");

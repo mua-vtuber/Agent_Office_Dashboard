@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { apiGet, apiPut } from "../lib/api";
+import { useErrorStore } from "./error-store";
 
 export type SeatPosition = { x: number; y: number };
 export type TransitionRule = { from: string; event: string; to: string };
@@ -73,9 +75,7 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
 
   load: async () => {
     try {
-      const apiBase = get().getApiBase();
-      const res = await fetch(`${apiBase}/api/settings`);
-      const json = (await res.json()) as { settings?: AppSettings };
+      const json = await apiGet<{ settings?: AppSettings }>("/api/settings");
       if (json.settings) {
         set({ settings: json.settings, loaded: true, error: null });
         if (json.settings.connection) {
@@ -85,19 +85,15 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
         set({ loaded: true });
       }
     } catch (e) {
-      set({ loaded: true, error: e instanceof Error ? e.message : "failed to load settings" });
+      const msg = e instanceof Error ? e.message : "failed to load settings";
+      set({ loaded: true, error: msg });
+      useErrorStore.getState().push("Settings", msg);
     }
   },
 
   update: async (partial) => {
     try {
-      const apiBase = get().getApiBase();
-      const res = await fetch(`${apiBase}/api/settings`, {
-        method: "PUT",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ settings: partial }),
-      });
-      const json = (await res.json()) as { ok?: boolean; settings?: AppSettings };
+      const json = await apiPut<{ ok?: boolean; settings?: AppSettings }>("/api/settings", { settings: partial });
       if (json.settings) {
         set({ settings: json.settings, error: null });
         if (json.settings.connection) {
@@ -105,7 +101,9 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
         }
       }
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : "failed to update settings" });
+      const msg = e instanceof Error ? e.message : "failed to update settings";
+      set({ error: msg });
+      useErrorStore.getState().push("Settings", msg);
     }
   },
 

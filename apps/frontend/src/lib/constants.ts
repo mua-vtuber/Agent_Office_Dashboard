@@ -36,6 +36,3 @@ export function getWsUrl(): string {
     return "ws://127.0.0.1:4800/ws";
   }
 }
-
-// Keep BACKEND_ORIGIN as alias for backward compatibility during migration
-export const BACKEND_ORIGIN = FALLBACK_BACKEND_ORIGIN;

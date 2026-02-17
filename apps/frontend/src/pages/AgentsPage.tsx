@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getBackendOrigin } from "../lib/constants";
+import { apiGet } from "../lib/api";
 import { useAgentStore } from "../stores/agent-store";
 import { useErrorStore } from "../stores/error-store";
 import { Link, useSearchParams } from "react-router-dom";
@@ -44,13 +44,11 @@ export function AgentsPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
-        const agentsRes = await fetch(`${origin}/api/agents${suffix}`);
-        const json = (await agentsRes.json()) as { agents?: AgentRow[] };
+        const json = await apiGet<{ agents?: AgentRow[] }>(`/api/agents${suffix}`);
         if (mounted && Array.isArray(json.agents)) {
           setAgents(json.agents);
           if (selectedAgentParam) {
@@ -75,13 +73,11 @@ export function AgentsPage(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const origin = getBackendOrigin();
         const query = new URLSearchParams();
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
         const encoded = encodeURIComponent(selectedId);
-        const res = await fetch(`${origin}/api/agents/${encoded}${suffix}`);
-        const json = (await res.json()) as { agent?: AgentDetail };
+        const json = await apiGet<{ agent?: AgentDetail }>(`/api/agents/${encoded}${suffix}`);
         if (mounted) setDetail(json.agent ?? null);
       } catch (e) {
         if (mounted) pushError(t("agents_detail"), e instanceof Error ? e.message : "failed to load agent detail");

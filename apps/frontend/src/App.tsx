@@ -10,7 +10,9 @@ import { ErrorModal } from "./components/layout/ErrorModal";
 import { useUiSettingsStore } from "./stores/ui-settings-store";
 import { useAppSettingsStore } from "./stores/app-settings-store";
 import { useTranslation } from "react-i18next";
-import { getBackendOrigin, getWsUrl } from "./lib/constants";
+import { useErrorStore } from "./stores/error-store";
+import { apiGet } from "./lib/api";
+import { getWsUrl } from "./lib/constants";
 
 type TerminalSession = {
   terminal_session_id: string;
@@ -28,6 +30,7 @@ export default function App(): JSX.Element {
   const loadSettings = useAppSettingsStore((s) => s.load);
   const settingsLoaded = useAppSettingsStore((s) => s.loaded);
   const { t, i18n } = useTranslation();
+  const pushError = useErrorStore((s) => s.push);
   const [terminals, setTerminals] = useState<TerminalSession[]>([]);
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
 
@@ -59,8 +62,7 @@ export default function App(): JSX.Element {
     let mounted = true;
     void (async () => {
       try {
-        const res = await fetch(`${getBackendOrigin()}/api/sessions`);
-        const json = (await res.json()) as { terminals?: TerminalSession[]; scopes?: Array<{ terminal_session_id: string; workspace_id: string; last_event_ts: string }> };
+        const json = await apiGet<{ terminals?: TerminalSession[]; scopes?: Array<{ terminal_session_id: string; workspace_id: string; last_event_ts: string }> }>("/api/sessions");
         if (!mounted) return;
         if (Array.isArray(json.terminals)) {
           setTerminals(json.terminals);
@@ -83,14 +85,17 @@ export default function App(): JSX.Element {
           return;
         }
         setTerminals([]);
-      } catch {
-        if (mounted) setTerminals([]);
+      } catch (e) {
+        if (mounted) {
+          pushError(t("app_title"), e instanceof Error ? e.message : "failed to load sessions");
+          setTerminals([]);
+        }
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [location.search]);
+  }, [location.search, pushError, t]);
 
   const terminalOptions = useMemo(() => terminals, [terminals]);
 
