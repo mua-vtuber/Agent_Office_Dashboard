@@ -97,7 +97,7 @@ function maskSensitiveText(input: string | null, maskingKeys: string[]): string 
 type HookEntry = { matcher?: string; command?: string; hooks?: Array<{ type?: string; command?: string }> };
 type HooksMap = Record<string, HookEntry[]>;
 type SettingsFile = Record<string, unknown> & { hooks?: HooksMap };
-type MergeResult = { added: string[]; skipped: string[]; backup?: string; error?: string };
+type MergeResult = { added: string[]; updated: string[]; skipped: string[]; backup?: string; error?: string };
 
 function globalSettingsPath(): string {
   return path.join(os.homedir(), ".claude", "settings.json");
@@ -118,6 +118,12 @@ function readJsonFile(filePath: string): Record<string, unknown> {
   }
 }
 
+function aodRoot(): string {
+  const root = process.env.AOD_ROOT ?? path.resolve(templatePath(), "../..");
+  // Normalize to forward slashes so the path works inside shell commands on all platforms
+  return root.replaceAll("\\", "/");
+}
+
 function readTemplateSettings(): { settings?: SettingsFile; template?: string; error?: string } {
   const tplPath = templatePath();
   if (!fs.existsSync(tplPath)) {
@@ -127,6 +133,7 @@ function readTemplateSettings(): { settings?: SettingsFile; template?: string; e
   let raw: string;
   try {
     raw = fs.readFileSync(tplPath, "utf8");
+    raw = raw.replaceAll("{{AOD_ROOT}}", aodRoot());
     settings = JSON.parse(raw) as SettingsFile;
   } catch (e) {
     return { error: e instanceof Error ? `invalid template json: ${e.message}` : "invalid template json" };
@@ -152,11 +159,18 @@ function extractCommands(entries: HookEntry[]): Set<string> {
   return cmds;
 }
 
+const AOD_HOOK_MARKER = "forward-to-aod";
+
+function isAodCommand(cmd: string): boolean {
+  return cmd.includes(AOD_HOOK_MARKER);
+}
+
 function mergeHooksIntoFile(targetPath: string, templateHooks: HooksMap): MergeResult {
   const targetSettings = readJsonFile(targetPath) as SettingsFile;
   const targetHooks = targetSettings.hooks && typeof targetSettings.hooks === "object" ? targetSettings.hooks : {};
 
   const added = new Set<string>();
+  const updated = new Set<string>();
   const skipped = new Set<string>();
 
   for (const [eventType, templateEntries] of Object.entries(templateHooks)) {
@@ -166,11 +180,26 @@ function mergeHooksIntoFile(targetPath: string, templateHooks: HooksMap): MergeR
 
     for (const templateEntry of templateEntries) {
       const templateCmds = extractCommands([templateEntry]);
-      const duplicated = Array.from(templateCmds).some((cmd) => existingCmds.has(cmd));
-      if (duplicated) {
+
+      // Exact match → skip
+      if (Array.from(templateCmds).some((cmd) => existingCmds.has(cmd))) {
         skipped.add(eventType);
         continue;
       }
+
+      // Same AOD script with different path → update in place
+      const isAodHook = Array.from(templateCmds).some(isAodCommand);
+      if (isAodHook) {
+        const idx = existingEntries.findIndex((entry) =>
+          Array.from(extractCommands([entry])).some(isAodCommand),
+        );
+        if (idx !== -1) {
+          existingEntries[idx] = templateEntry;
+          updated.add(eventType);
+          continue;
+        }
+      }
+
       existingEntries.push(templateEntry);
       for (const cmd of templateCmds) existingCmds.add(cmd);
       added.add(eventType);
@@ -179,8 +208,8 @@ function mergeHooksIntoFile(targetPath: string, templateHooks: HooksMap): MergeR
     targetHooks[eventType] = existingEntries;
   }
 
-  if (added.size === 0) {
-    return { added: [], skipped: Array.from(skipped) };
+  if (added.size === 0 && updated.size === 0) {
+    return { added: [], updated: [], skipped: Array.from(skipped) };
   }
 
   let backup: string | undefined;
@@ -193,7 +222,7 @@ function mergeHooksIntoFile(targetPath: string, templateHooks: HooksMap): MergeR
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   fs.writeFileSync(targetPath, JSON.stringify(targetSettings, null, 2) + "\n", "utf8");
 
-  const result: MergeResult = { added: Array.from(added), skipped: Array.from(skipped) };
+  const result: MergeResult = { added: Array.from(added), updated: Array.from(updated), skipped: Array.from(skipped) };
   if (backup) result.backup = backup;
   return result;
 }
@@ -286,12 +315,15 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
         };
       }
 
-      const changed = merged.added.length > 0;
+      const changed = merged.added.length > 0 || merged.updated.length > 0;
+      const parts: string[] = [];
+      if (merged.added.length > 0) parts.push(`added: ${merged.added.join(", ")}`);
+      if (merged.updated.length > 0) parts.push(`updated: ${merged.updated.join(", ")}`);
       return {
         ok: true,
         mode: "write",
         message: changed
-          ? `hooks merged for: ${merged.added.join(", ")}`
+          ? `hooks ${parts.join("; ")}`
           : "hooks already configured",
         target_file: targetFile,
         next_step: changed ? "Restart Claude Code session to activate hooks." : undefined
@@ -317,16 +349,20 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
         return { ok: false, message: result.error, added: [], skipped: [] };
       }
 
+      const changed = result.added.length > 0 || result.updated.length > 0;
+      const parts: string[] = [];
+      if (result.added.length > 0) parts.push(`added: ${result.added.join(", ")}`);
+      if (result.updated.length > 0) parts.push(`updated: ${result.updated.join(", ")}`);
       return {
         ok: true,
         target_file: globalSettingsPath(),
         backup: result.backup ?? null,
         added: result.added,
+        updated: result.updated,
         skipped: result.skipped,
-        message:
-          result.added.length > 0
-            ? `Added hooks for: ${result.added.join(", ")}. Restart Claude Code to activate.`
-            : "All hooks already configured. Nothing changed."
+        message: changed
+          ? `Hooks ${parts.join("; ")}. Restart Claude Code to activate.`
+          : "All hooks already configured. Nothing changed."
       };
     } catch (e) {
       return {

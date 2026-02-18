@@ -1,19 +1,20 @@
-import { Container, Graphics, Sprite } from "pixi.js";
-import type { PartDrawFn } from "./types";
+import { Container, Sprite } from "pixi.js";
 import { CHAR_W, ORIGIN_X, ORIGIN_Y } from "./types";
 import { generateTraits } from "./generator";
 import { buildColorMap, swapPalette } from "./palette";
 
 /* ---------- Auto-discovery via import.meta.glob ---------- */
 
-const bodyModules = import.meta.glob("./parts/body/*.ts", { eager: true }) as Record<
-  string,
-  { default: PartDrawFn }
->;
-const hairModules = import.meta.glob("./parts/hair/*.ts", { eager: true }) as Record<
-  string,
-  { default: PartDrawFn }
->;
+const bodyModules = import.meta.glob("./parts/body/*.svg", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
+const hairModules = import.meta.glob("./parts/hair/*.svg", {
+  eager: true,
+  query: "?url",
+  import: "default",
+}) as Record<string, string>;
 const costumeModules = import.meta.glob("./parts/costume/*.svg", {
   eager: true,
   query: "?url",
@@ -25,12 +26,8 @@ const accessoryModules = import.meta.glob("./parts/accessory/*.svg", {
   import: "default",
 }) as Record<string, string>;
 
-const bodyParts: PartDrawFn[] = Object.values(bodyModules)
-  .map((m) => m.default)
-  .filter(Boolean);
-const hairParts: PartDrawFn[] = Object.values(hairModules)
-  .map((m) => m.default)
-  .filter(Boolean);
+const bodyPaths: string[] = Object.values(bodyModules);
+const hairPaths: string[] = Object.values(hairModules);
 const costumePaths: string[] = Object.values(costumeModules);
 const accessoryPaths: string[] = Object.values(accessoryModules);
 
@@ -61,22 +58,31 @@ export async function buildCharacter(
   scale?: number,
 ): Promise<Container> {
   const cached = cache.get(agentId);
-  if (cached) return cached;
+  if (cached && !cached.destroyed) return cached;
+  // Evict destroyed entry
+  if (cached) cache.delete(agentId);
 
   const traits = generateTraits(agentId, {
-    body: bodyParts.length,
-    hair: hairParts.length,
+    body: bodyPaths.length,
+    hair: hairPaths.length,
     costume: costumePaths.length,
     accessory: accessoryPaths.length,
   });
 
   const container = new Container();
 
-  // Layer 1: body (code-based Graphics)
-  const bodyGfx = new Graphics();
-  const bodyDrawFn = bodyParts[traits.bodyIndex]!;
-  bodyDrawFn(bodyGfx, [traits.skinColor]);
-  container.addChild(bodyGfx);
+  // Layer 1: body (SVG + skin color swap)
+  const bodyColorMap = buildColorMap([traits.skinColor]);
+  const bodyTexture = await swapPalette(
+    bodyPaths[traits.bodyIndex]!,
+    bodyColorMap,
+  );
+  const bodySprite = new Sprite(bodyTexture);
+  bodySprite.width = CHAR_W;
+  bodySprite.height = CHAR_W;
+  bodySprite.x = -ORIGIN_X;
+  bodySprite.y = -ORIGIN_Y;
+  container.addChild(bodySprite);
 
   // Layer 2: costume (SVG + palette swap)
   const costumeColorMap = buildColorMap(traits.costumeColors);
@@ -91,11 +97,18 @@ export async function buildCharacter(
   costumeSprite.y = -ORIGIN_Y;
   container.addChild(costumeSprite);
 
-  // Layer 3: hair (code-based Graphics)
-  const hairGfx = new Graphics();
-  const hairDrawFn = hairParts[traits.hairIndex]!;
-  hairDrawFn(hairGfx, [traits.hairColor]);
-  container.addChild(hairGfx);
+  // Layer 3: hair (SVG + hair color swap)
+  const hairColorMap = buildColorMap([traits.hairColor]);
+  const hairTexture = await swapPalette(
+    hairPaths[traits.hairIndex]!,
+    hairColorMap,
+  );
+  const hairSprite = new Sprite(hairTexture);
+  hairSprite.width = CHAR_W;
+  hairSprite.height = CHAR_W;
+  hairSprite.x = -ORIGIN_X;
+  hairSprite.y = -ORIGIN_Y;
+  container.addChild(hairSprite);
 
   // Layer 4: accessory (SVG + palette swap, optional)
   if (traits.accessoryIndex >= 0) {

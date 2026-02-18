@@ -44,7 +44,17 @@ function isManager(id: string): boolean { return id.endsWith("/leader"); }
 function seatFor(agent: AgentView, workers: AgentView[], seatPoints: Point[]): Point {
   if (isManager(agent.agent_id)) return seatPoints[0] ?? { x: 0, y: 0 };
   const idx = workers.findIndex((w) => w.agent_id === agent.agent_id);
-  return seatPoints[(idx % (seatPoints.length - 1)) + 1] ?? seatPoints[1] ?? { x: 0, y: 0 };
+  const workerSeats = seatPoints.length - 1;
+  if (workerSeats <= 0) return seatPoints[0] ?? { x: 0, y: 0 };
+  const seatIdx = (idx % workerSeats) + 1;
+  const base = seatPoints[seatIdx] ?? seatPoints[1] ?? { x: 0, y: 0 };
+  // When more workers than seats, offset overflow agents so they don't overlap exactly
+  const overflow = Math.floor(idx / workerSeats);
+  if (overflow === 0) return base;
+  const seed = hashSeed(agent.agent_id);
+  const angle = ((seed % 360) * Math.PI) / 180;
+  const radius = 1.5 + (overflow * 1.2);
+  return { x: base.x + Math.cos(angle) * radius, y: base.y + Math.sin(angle) * radius };
 }
 
 function targetFor(
@@ -59,7 +69,12 @@ function targetFor(
   const s = agent.status;
   if (s === "meeting" || s === "handoff" || s === "returning") {
     const i = hashSeed(agent.agent_id) % meetingSpots.length;
-    return meetingSpots[i] ?? seatFor(agent, workers, seatPoints);
+    const spot = meetingSpots[i] ?? seatFor(agent, workers, seatPoints);
+    // Offset agents within the same meeting spot so they don't stack exactly
+    const seed = hashSeed(agent.agent_id + "-meet");
+    const angle = ((seed % 360) * Math.PI) / 180;
+    const radius = 1 + (seed % 3);
+    return { x: spot.x + Math.cos(angle) * radius, y: spot.y + Math.sin(angle) * radius };
   }
   if (s === "breakroom" || s === "offline")
     return pickInZone(pantryZone, hashSeed(`${agent.agent_id}-pantry`));
@@ -419,6 +434,7 @@ export function OfficePage(): JSX.Element {
 
       drawScene(app.stage, seatPoints, officeLayout);
       const layer = new Container();
+      layer.sortableChildren = true;
       app.stage.addChild(layer);
       layerRef.current = layer;
 
@@ -444,6 +460,7 @@ export function OfficePage(): JSX.Element {
           }
           n.root.x = n.cur.x;
           n.root.y = n.cur.y;
+          n.root.zIndex = Math.floor(n.cur.y);
 
           // Pulse ring for working agents
           if (n.ring.visible) n.ring.alpha = ringAlpha;

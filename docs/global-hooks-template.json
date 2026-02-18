@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+            "command": "node {{AOD_ROOT}}/scripts/hooks/forward-to-aod.mjs"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+            "command": "node {{AOD_ROOT}}/scripts/hooks/forward-to-aod.mjs"
           }
         ]
       }
@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+            "command": "node {{AOD_ROOT}}/scripts/hooks/forward-to-aod.mjs"
           }
         ]
       }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+            "command": "node {{AOD_ROOT}}/scripts/hooks/forward-to-aod.mjs"
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+            "command": "node {{AOD_ROOT}}/scripts/hooks/forward-to-aod.mjs"
           }
         ]
       }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash /home/taniar/git/agent-office-dashboard/scripts/hooks/forward-to-aod.sh"
+            "command": "node {{AOD_ROOT}}/scripts/hooks/forward-to-aod.mjs"
           }
         ]
       }

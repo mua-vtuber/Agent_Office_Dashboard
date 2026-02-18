@@ -75,12 +75,40 @@ export function buildColorMap(colors: number[]): Record<string, string> {
   return map;
 }
 
+/**
+ * Illustrator exports colors as CSS names ("red") or shorthand hex ("#f00")
+ * instead of full hex ("#FF0000"). Normalize to canonical marker format
+ * so swapPalette can find and replace them.
+ */
+const COLOR_ALIASES: Record<string, string> = {
+  // CSS names → canonical hex (matching MARKER_COLORS)
+  red: "#FF0000",
+  lime: "#00FF00",
+  blue: "#0000FF",
+  yellow: "#FFFF00",
+  // shorthand hex
+  "#f00": "#FF0000",
+  "#0f0": "#00FF00",
+  "#00f": "#0000FF",
+  "#ff0": "#FFFF00",
+};
+
+function normalizeSvgColors(svg: string): string {
+  // Replace fill="red" / fill:#f00; / fill:"red" patterns
+  return svg.replace(
+    /(?<=fill\s*[:=]\s*"?)([a-z]+|#[0-9a-f]{3})(?="|\s*;)/gi,
+    (match) => COLOR_ALIASES[match.toLowerCase()] ?? match,
+  );
+}
+
 /** Fetch SVG, replace marker colors, return PixiJS Texture */
 export async function swapPalette(
   svgUrl: string,
   colorMap: Record<string, string>,
 ): Promise<Texture> {
   let svg = await fetch(svgUrl).then((r) => r.text());
+
+  svg = normalizeSvgColors(svg);
 
   for (const [marker, replacement] of Object.entries(colorMap)) {
     svg = svg.replaceAll(marker, replacement);

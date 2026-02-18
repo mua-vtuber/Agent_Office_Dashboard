@@ -1,13 +1,8 @@
-import type { Graphics } from "pixi.js";
-
 /* Canvas constants — shared coordinate system for all parts */
 export const CHAR_W = 40;
 export const CHAR_H = 40;
 export const ORIGIN_X = CHAR_W / 2; // 20
 export const ORIGIN_Y = CHAR_H / 2; // 20
-
-/* Drawing function signature for code-based parts (body, hair) */
-export type PartDrawFn = (graphics: Graphics, colors: number[]) => void;
 
 /* Character traits determined from seed */
 export interface CharacterTraits {
