@@ -59,7 +59,29 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
       const rawThinking = (event.payload as Record<string, unknown>).thinking as string | null | undefined;
       let thinkingText: string | null = rawThinking ?? null;
       if (thinkingText && settings.thought_bubble?.enabled) {
-        thinkingText = await translateThinking(thinkingText);
+        const translated = await translateThinking(thinkingText);
+        thinkingText = translated.text;
+        if (translated.error) {
+          app.log.error(
+            {
+              event_id: event.id,
+              agent_id: event.agent_id,
+              error: translated.error,
+              request_id: request.id
+            },
+            "thinking translation failed"
+          );
+          broadcast({
+            type: "runtime_error",
+            data: {
+              source: "translator",
+              message: translated.error,
+              event_id: event.id,
+              agent_id: event.agent_id,
+              ts: event.ts
+            },
+          });
+        }
       }
 
       upsertState({

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useAgentStore } from "./agent-store";
 import { useEventStore } from "./event-store";
 import { useTaskStore, type TaskView } from "./task-store";
+import { useErrorStore } from "./error-store";
 
 type WsStatus = "idle" | "connecting" | "connected" | "disconnected";
 
@@ -49,7 +50,7 @@ export const useWsStore = create<WsStore>((set, get) => {
     });
 
     ws.addEventListener("error", () => {
-      // close event will follow; reconnect is handled there
+      useErrorStore.getState().push("WebSocket", "WebSocket connection error");
     });
 
     ws.addEventListener("message", (evt) => {
@@ -105,8 +106,14 @@ export const useWsStore = create<WsStore>((set, get) => {
         if (msg.type === "heartbeat") {
           set({ status: "connected" });
         }
+        if (msg.type === "runtime_error" && msg.data) {
+          const d = msg.data as { source?: string; message?: string };
+          useErrorStore
+            .getState()
+            .push(d.source ? `Runtime/${d.source}` : "Runtime", d.message ?? "runtime error");
+        }
       } catch {
-        // ignore malformed messages
+        useErrorStore.getState().push("WebSocket", "received malformed WebSocket message");
       }
     });
 

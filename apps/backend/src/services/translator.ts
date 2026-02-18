@@ -1,25 +1,26 @@
 import type { Settings } from "@aod/shared-schema";
 import { defaultSettings } from "@aod/shared-schema";
-import { getSetting } from "../storage/settings-repo";
+import { getMergedSettings } from "./settings-service";
 
 type TranslationConfig = Settings["thought_bubble"]["translation"];
+export type TranslationResult = { text: string; error: string | null };
 
 function getTranslationConfig(): TranslationConfig {
-  const settings = getSetting<Settings>("app");
+  const settings = getMergedSettings();
   return settings?.thought_bubble?.translation ?? defaultSettings.thought_bubble.translation;
 }
 
 /**
  * Translate thinking text using the configured API.
  *
- * - If translation is disabled or api_key is empty, returns the original text.
- * - If translation is enabled and fails, returns an error string (no silent fallback).
+ * - If translation is disabled or api_key is empty, returns original text with no error.
+ * - If translation is enabled and fails, keeps original text and returns explicit error.
  */
-export async function translateThinking(text: string): Promise<string> {
+export async function translateThinking(text: string): Promise<TranslationResult> {
   const config = getTranslationConfig();
 
   if (!config.enabled || !config.api_key) {
-    return text;
+    return { text, error: null };
   }
 
   const body = {
@@ -47,11 +48,11 @@ export async function translateThinking(text: string): Promise<string> {
     });
   } catch (err) {
     const reason = err instanceof Error ? err.message : "network error";
-    return `[Translation Error: ${reason}]`;
+    return { text, error: `translation request failed: ${reason}` };
   }
 
   if (!response.ok) {
-    return `[Translation Error: HTTP ${response.status}]`;
+    return { text, error: `translation API returned HTTP ${response.status}` };
   }
 
   try {
@@ -60,10 +61,10 @@ export async function translateThinking(text: string): Promise<string> {
     };
     const textBlock = json.content?.find((b) => b.type === "text" && typeof b.text === "string");
     if (!textBlock?.text) {
-      return `[Translation Error: empty response]`;
+      return { text, error: "translation API returned empty text" };
     }
-    return textBlock.text;
+    return { text: textBlock.text, error: null };
   } catch {
-    return `[Translation Error: invalid response format]`;
+    return { text, error: "translation API returned invalid response format" };
   }
 }

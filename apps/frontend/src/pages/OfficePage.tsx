@@ -316,6 +316,14 @@ export function OfficePage(): JSX.Element {
       .map(([, point]) => point);
   }, [officeLayout]);
 
+  useEffect(() => {
+    moveSpeedRef.current = settings?.operations?.move_speed_px_per_sec ?? DEFAULT_MOVE_SPEED;
+    tbConfigRef.current = {
+      enabled: settings?.thought_bubble?.enabled ?? true,
+      max_length: settings?.thought_bubble?.max_length ?? 120,
+    };
+  }, [settings]);
+
   /* Fetch snapshot + settings */
   useEffect(() => {
     let mounted = true;
@@ -325,15 +333,7 @@ export function OfficePage(): JSX.Element {
         if (selectedTerminal) query.set("terminal_session_id", selectedTerminal);
         const suffix = query.toString() ? `?${query.toString()}` : "";
 
-        const [snapshotResult, settingsResult] = await Promise.allSettled([
-          apiGet<{ agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }> }>(`/api/snapshot${suffix}`),
-          apiGet<{ value?: { operations?: { move_speed_px_per_sec?: number }; thought_bubble?: { enabled?: boolean; max_length?: number } } }>("/api/settings/app"),
-        ]);
-
-        if (snapshotResult.status !== "fulfilled") {
-          throw snapshotResult.reason;
-        }
-        const snapshotJson = snapshotResult.value;
+        const snapshotJson = await apiGet<{ agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }> }>(`/api/snapshot${suffix}`);
 
         if (mounted && Array.isArray(snapshotJson.agents)) {
           setManyAgents(snapshotJson.agents.map((a) => ({
@@ -342,26 +342,6 @@ export function OfficePage(): JSX.Element {
             thinking: a.thinking_text ?? null,
             last_event_ts: a.last_event_ts,
           })));
-        }
-
-        if (settingsResult.status === "fulfilled") {
-          const settingsJson = settingsResult.value;
-          const speed = settingsJson.value?.operations?.move_speed_px_per_sec;
-          if (typeof speed === "number" && speed >= 30) moveSpeedRef.current = speed;
-          const tb = settingsJson.value?.thought_bubble;
-          if (tb) {
-            tbConfigRef.current = {
-              enabled: tb.enabled ?? true,
-              max_length: tb.max_length ?? 120,
-            };
-          }
-        } else if (mounted) {
-          pushError(
-            t("office_title"),
-            settingsResult.reason instanceof Error
-              ? settingsResult.reason.message
-              : "failed to load office runtime settings"
-          );
         }
       } catch (e) {
         if (mounted) pushError(t("office_title"), e instanceof Error ? e.message : "failed to load office snapshot");

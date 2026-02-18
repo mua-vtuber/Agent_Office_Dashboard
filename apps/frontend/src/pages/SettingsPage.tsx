@@ -73,6 +73,7 @@ export function SettingsPage(): JSX.Element {
   const [draftLanguage, setDraftLanguage] = useState<"ko" | "en">(language);
   const [draftMotion, setDraftMotion] = useState<"low" | "normal" | "high">(motion);
   const [draftLayoutProfile, setDraftLayoutProfile] = useState<string>("kr_t_left_v2");
+  const [savedLayoutProfile, setSavedLayoutProfile] = useState<string>(defaultSettings.office_layout.layout_profile);
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -82,9 +83,10 @@ export function SettingsPage(): JSX.Element {
   const [tbSaveMsg, setTbSaveMsg] = useState<string>("");
   const layoutProfiles = [draftLayoutProfile, defaultSettings.office_layout.layout_profile]
     .filter((v, i, arr) => !!v && arr.indexOf(v) === i);
+  const currentLayoutProfile = draftLayoutProfile || defaultSettings.office_layout.layout_profile;
 
   const hasDirty =
-    draftLanguage !== language || draftMotion !== motion || draftLayoutProfile !== "kr_t_left_v2";
+    draftLanguage !== language || draftMotion !== motion || currentLayoutProfile !== savedLayoutProfile;
 
   const refreshStatus = async (): Promise<void> => {
     try {
@@ -95,18 +97,7 @@ export function SettingsPage(): JSX.Element {
     }
   };
 
-  // Load server settings for thought_bubble
   useEffect(() => {
-    void (async () => {
-      try {
-        const json = await apiGet<{ value?: { thought_bubble?: ThoughtBubbleForm } }>("/api/settings/app");
-        if (json.value?.thought_bubble) {
-          setTbForm(json.value.thought_bubble);
-        }
-      } catch (e) {
-        pushError(t("settings_thought_bubble_title"), e instanceof Error ? e.message : "failed to load thought bubble settings");
-      }
-    })();
     void refreshStatus();
   }, [pushError, t]);
 
@@ -122,6 +113,7 @@ export function SettingsPage(): JSX.Element {
             layout_profile?: string;
             general?: { language?: "ko" | "en" };
             office_layout?: { layout_profile?: string };
+            thought_bubble?: ThoughtBubbleForm;
           };
         }>("/api/settings");
         if (!mounted) return;
@@ -133,6 +125,10 @@ export function SettingsPage(): JSX.Element {
         setDraftLanguage(serverLanguage);
         setDraftMotion(serverMotion);
         setDraftLayoutProfile(serverLayout);
+        setSavedLayoutProfile(serverLayout);
+        if (json.settings?.thought_bubble) {
+          setTbForm(json.settings.thought_bubble);
+        }
         setLoaded(true);
       } catch (e) {
         if (mounted) {
@@ -162,6 +158,7 @@ export function SettingsPage(): JSX.Element {
       }
       setAllUi({ language: draftLanguage, motion: draftMotion });
       void i18n.changeLanguage(draftLanguage);
+      setSavedLayoutProfile(draftLayoutProfile);
       setSaveMessage(t("settings_saved"));
     } catch (e) {
       pushError(t("settings_title"), e instanceof Error ? e.message : "failed to save settings");
@@ -206,9 +203,10 @@ export function SettingsPage(): JSX.Element {
   const saveThoughtBubble = async (): Promise<void> => {
     setTbSaveMsg("");
     try {
-      const currentJson = await apiGet<{ value?: Record<string, unknown> }>("/api/settings/app");
-      const merged = { ...currentJson.value, thought_bubble: tbForm };
-      await apiPut("/api/settings/app", { value: merged });
+      const result = await apiPut<{ ok?: boolean }>("/api/settings", { settings: { thought_bubble: tbForm } });
+      if (!result.ok) {
+        throw new Error("failed to save thought bubble settings");
+      }
       setTbSaveMsg(t("settings_thought_bubble_save_ok"));
     } catch (e) {
       setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: e instanceof Error ? e.message : "unknown" }));
