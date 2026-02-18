@@ -2,8 +2,7 @@ import { useState } from "react";
 import { useAppSettingsStore } from "../../stores/app-settings-store";
 import { useErrorStore } from "../../stores/error-store";
 import { useTranslation } from "react-i18next";
-
-const CONNECTION_STORAGE_KEY = "aod.connection.v1";
+import { saveConnection } from "../../lib/constants";
 
 export function ConnectionSettings(): JSX.Element {
   const { t } = useTranslation();
@@ -18,9 +17,7 @@ export function ConnectionSettings(): JSX.Element {
     setSaving(true);
     try {
       await update({ connection: { api_base_url: apiUrl, ws_url: wsUrl } });
-      try {
-        localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify({ api_base_url: apiUrl, ws_url: wsUrl }));
-      } catch { /* ignore */ }
+      saveConnection({ api_base_url: apiUrl, ws_url: wsUrl });
     } catch (e) {
       pushError(t("settings_connection_title"), e instanceof Error ? e.message : "failed to save");
     } finally {

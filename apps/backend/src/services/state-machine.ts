@@ -69,10 +69,72 @@ const transitionTable: TransitionRule[] = [
   { from: "idle",           event: "agent_blocked",     to: "pending_input" },
 ];
 
+const KNOWN_STATUSES = new Set<AgentStatus>([
+  "idle",
+  "working",
+  "handoff",
+  "meeting",
+  "returning",
+  "pending_input",
+  "failed",
+  "completed",
+  "roaming",
+  "breakroom",
+  "resting",
+  "offline",
+]);
+
+const KNOWN_EVENTS = new Set<NormalizedEvent["type"]>([
+  "agent_started",
+  "agent_stopped",
+  "agent_blocked",
+  "agent_unblocked",
+  "task_created",
+  "manager_assign",
+  "agent_acknowledged",
+  "task_started",
+  "task_progress",
+  "task_completed",
+  "task_failed",
+  "meeting_requested",
+  "meeting_started",
+  "meeting_ended",
+  "tool_started",
+  "tool_succeeded",
+  "tool_failed",
+  "heartbeat",
+  "schema_error",
+]);
+
+function toDynamicRules(settings: Settings): TransitionRule[] {
+  const source = settings.transition_rules;
+  if (!Array.isArray(source)) return [];
+
+  const rules: TransitionRule[] = [];
+  for (const raw of source) {
+    const from = raw.from;
+    const event = raw.event;
+    const to = raw.to;
+
+    if (from !== "*" && !KNOWN_STATUSES.has(from as AgentStatus)) continue;
+    if (!KNOWN_EVENTS.has(event as NormalizedEvent["type"])) continue;
+    if (!KNOWN_STATUSES.has(to as AgentStatus)) continue;
+
+    rules.push({
+      from: from as AgentStatus | "*",
+      event: event as NormalizedEvent["type"],
+      to: to as AgentStatus,
+    });
+  }
+
+  return rules;
+}
+
 // --- Core transition function ---
 
 export function nextStatus(ctx: TransitionContext): AgentStatus {
-  for (const rule of transitionTable) {
+  const rules = [...toDynamicRules(ctx.settings), ...transitionTable];
+  for (const rule of rules) {
     if (rule.from !== "*" && rule.from !== ctx.current) continue;
     if (rule.event !== ctx.event.type) continue;
     if (rule.condition && !rule.condition(ctx)) continue;

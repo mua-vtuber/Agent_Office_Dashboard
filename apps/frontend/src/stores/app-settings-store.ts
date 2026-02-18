@@ -2,10 +2,9 @@ import { create } from "zustand";
 import type { Settings } from "@aod/shared-schema";
 import { apiGet, apiPut } from "../lib/api";
 import { useErrorStore } from "./error-store";
+import { CONNECTION_STORAGE_KEY } from "../lib/constants";
 
 export type { SeatPosition, TransitionRule } from "@aod/shared-schema";
-
-const CONNECTION_STORAGE_KEY = "aod.connection.v1";
 
 function loadConnectionFromStorage(): { api_base_url: string; ws_url: string } | null {
   try {
@@ -20,8 +19,8 @@ function loadConnectionFromStorage(): { api_base_url: string; ws_url: string } |
 function saveConnectionToStorage(connection: { api_base_url: string; ws_url: string }): void {
   try {
     localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify(connection));
-  } catch {
-    // ignore storage failures
+  } catch (error) {
+    throw new Error(`failed to persist connection settings: ${String(error)}`);
   }
 }
 
@@ -35,8 +34,11 @@ type AppSettingsStore = {
   getWsUrl: () => string;
 };
 
-const FALLBACK_API = "http://127.0.0.1:4800";
-const FALLBACK_WS = "ws://127.0.0.1:4800/ws";
+function normalizeWsFromHttp(httpUrl: string): string {
+  if (httpUrl.startsWith("https://")) return `wss://${httpUrl.slice("https://".length)}/ws`;
+  if (httpUrl.startsWith("http://")) return `ws://${httpUrl.slice("http://".length)}/ws`;
+  throw new Error(`invalid api_base_url protocol: ${httpUrl}`);
+}
 
 export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
   settings: null,
@@ -82,7 +84,10 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
     if (s?.connection?.api_base_url) return s.connection.api_base_url;
     const stored = loadConnectionFromStorage();
     if (stored?.api_base_url) return stored.api_base_url;
-    return FALLBACK_API;
+    const fromEnv = import.meta.env.VITE_API_BASE_URL as string | undefined;
+    if (fromEnv && fromEnv.trim().length > 0) return fromEnv;
+    if (typeof window !== "undefined" && window.location?.origin) return window.location.origin;
+    throw new Error("api base URL is not configured");
   },
 
   getWsUrl: () => {
@@ -90,6 +95,8 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
     if (s?.connection?.ws_url) return s.connection.ws_url;
     const stored = loadConnectionFromStorage();
     if (stored?.ws_url) return stored.ws_url;
-    return FALLBACK_WS;
+    const fromEnv = import.meta.env.VITE_WS_URL as string | undefined;
+    if (fromEnv && fromEnv.trim().length > 0) return fromEnv;
+    return normalizeWsFromHttp(get().getApiBase());
   },
 }));

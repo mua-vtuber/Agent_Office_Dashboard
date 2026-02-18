@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
 # Claude Code hook payload arrives via stdin.
-payload="$(cat || true)"
+payload="$(cat)"
 if [ -z "${payload}" ]; then
-  exit 0
+  echo "[AOD hook] empty payload from stdin" >&2
+  exit 1
 fi
 
 collector_url="${AOD_COLLECTOR_URL:-http://127.0.0.1:4800/ingest/hooks}"
@@ -79,7 +80,8 @@ PY
 )"
 
 if [ -z "${enriched_payload}" ]; then
-  exit 0
+  echo "[AOD hook] failed to enrich payload" >&2
+  exit 1
 fi
 
 curl_args=(
@@ -95,5 +97,5 @@ if [ -n "${DASHBOARD_TOKEN:-}" ]; then
   curl_args+=( -H "Authorization: Bearer ${DASHBOARD_TOKEN}" )
 fi
 
-curl "${curl_args[@]}" >/dev/null 2>&1 || true
+curl "${curl_args[@]}" >/dev/null
 exit 0

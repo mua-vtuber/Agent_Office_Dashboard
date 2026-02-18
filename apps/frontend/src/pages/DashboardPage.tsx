@@ -8,6 +8,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { AlertPanel } from "../components/dashboard/AlertPanel";
 import { ActiveTaskList } from "../components/dashboard/ActiveTaskList";
+import { useAppSettingsStore } from "../stores/app-settings-store";
 
 type SnapshotAgent = {
   agent_id: string;
@@ -92,8 +93,11 @@ export function DashboardPage(): JSX.Element {
   const [selectedEventId, setSelectedEventId] = useState<string>("");
   const [context, setContext] = useState<EventContext | null>(null);
   const [loadingContext, setLoadingContext] = useState(false);
-  const syncIntervalRef = useRef(DEFAULT_SYNC_INTERVAL_SEC);
+  const appSettings = useAppSettingsStore((s) => s.settings);
+  const syncErrorShownRef = useRef(false);
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
+  const syncIntervalSec =
+    appSettings?.operations?.snapshot_sync_interval_sec ?? DEFAULT_SYNC_INTERVAL_SEC;
 
   const buildSuffix = useCallback((): string => {
     const query = new URLSearchParams();
@@ -164,13 +168,20 @@ export function DashboardPage(): JSX.Element {
         }
         if (Array.isArray(snapshotJson.tasks)) setTasks(snapshotJson.tasks);
         if (Array.isArray(eventsJson.events)) setAllEvents(eventsJson.events);
-      } catch {
-        // silent -- WS and next tick will retry
+        syncErrorShownRef.current = false;
+      } catch (e) {
+        if (!syncErrorShownRef.current) {
+          pushError(
+            t("dashboard_title"),
+            e instanceof Error ? e.message : "failed to refresh dashboard snapshot"
+          );
+          syncErrorShownRef.current = true;
+        }
       }
-    }, syncIntervalRef.current * 1000);
+    }, syncIntervalSec * 1000);
 
     return () => window.clearInterval(intervalId);
-  }, [setManyAgents, setAllEvents, buildSuffix]);
+  }, [setManyAgents, setAllEvents, buildSuffix, pushError, t, syncIntervalSec]);
 
   useEffect(() => {
     if (!selectedEventId) return;
