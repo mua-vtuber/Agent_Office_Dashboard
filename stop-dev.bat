@@ -10,10 +10,5 @@ for %%P in (4800 3000) do (
   )
 )
 
-:: Also try WSL if available
-where wsl.exe >nul 2>&1 && (
-  wsl.exe bash -lc "for p in 4800 3000; do fuser -k ${p}/tcp >/dev/null 2>&1 || true; done"
-)
-
 echo [AOD] Done.
 endlocal

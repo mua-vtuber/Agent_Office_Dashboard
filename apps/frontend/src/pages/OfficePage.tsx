@@ -198,6 +198,8 @@ function createNode(agent: AgentView, pos: Point, tbConfig: ThoughtBubbleConfig)
     fallback.destroy({ children: true });
     root.addChildAt(charContainer, idx);
     node.body = charContainer;
+  }).catch((err) => {
+    console.warn(`[AOD] Failed to build character for ${agent.agent_id}:`, err);
   });
 
   return node;

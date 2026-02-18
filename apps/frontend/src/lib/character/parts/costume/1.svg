@@ -1,6 +1,0 @@
-<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-  <!-- zone 1: top -->
-  <rect x="14" y="22" width="12" height="7" rx="1" fill="#FF0000"/>
-  <!-- zone 2: bottom -->
-  <rect x="14" y="30" width="12" height="5" rx="1" fill="#00FF00"/>
-</svg>

@@ -1,6 +1,6 @@
 /* Canvas constants — shared coordinate system for all parts */
-export const CHAR_W = 40;
-export const CHAR_H = 40;
+export const CHAR_W = 100;
+export const CHAR_H = 100;
 export const ORIGIN_X = CHAR_W / 2; // 20
 export const ORIGIN_Y = CHAR_H / 2; // 20
 
