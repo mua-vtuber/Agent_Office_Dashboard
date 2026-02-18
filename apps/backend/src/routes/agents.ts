@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listStatesScoped, type StateRow } from "../storage/state-repo";
 import { getAgent } from "../storage/agents-repo";
 import { listEventsByAgent } from "../storage/events-repo";
+import { listActiveSessions } from "../storage/sessions-repo";
 
 function scopeFilter(query: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): {
   workspace_id?: string;
@@ -13,6 +14,23 @@ function scopeFilter(query: { workspace_id?: string; terminal_session_id?: strin
   if (query.terminal_session_id) filter.terminal_session_id = query.terminal_session_id;
   if (query.run_id) filter.run_id = query.run_id;
   return filter;
+}
+
+function makeSessionKey(workspaceId: string, terminalSessionId: string, runId: string): string {
+  return `${workspaceId}::${terminalSessionId}::${runId}`;
+}
+
+function isExplicitFilter(filter: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): boolean {
+  return Boolean(filter.workspace_id || filter.terminal_session_id || filter.run_id);
+}
+
+function filterByActiveSessions(rows: StateRow[]): StateRow[] {
+  const activeKeys = new Set(
+    listActiveSessions().map((s) => makeSessionKey(s.workspace_id, s.terminal_session_id, s.run_id))
+  );
+  return rows.filter((row) =>
+    activeKeys.has(makeSessionKey(row.workspace_id, row.terminal_session_id, row.run_id))
+  );
 }
 
 function buildAgentView(state: StateRow) {
@@ -33,7 +51,10 @@ function buildAgentView(state: StateRow) {
 export async function registerAgentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/agents", async (request) => {
     const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
-    const states = listStatesScoped(scopeFilter(query));
+    const filter = scopeFilter(query);
+    const explicit = isExplicitFilter(filter);
+    const scoped = listStatesScoped(filter);
+    const states = explicit ? scoped : filterByActiveSessions(scoped);
     return {
       agents: states.map(buildAgentView),
     };
@@ -44,7 +65,10 @@ export async function registerAgentRoutes(app: FastifyInstance): Promise<void> {
     const agentId = decodeURIComponent(params.agentId);
 
     const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
-    const states = listStatesScoped(scopeFilter(query));
+    const filter = scopeFilter(query);
+    const explicit = isExplicitFilter(filter);
+    const scoped = listStatesScoped(filter);
+    const states = explicit ? scoped : filterByActiveSessions(scoped);
     const state = states.find((s) => s.agent_id === agentId);
 
     if (!state) {

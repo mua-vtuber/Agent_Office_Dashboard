@@ -6,6 +6,7 @@ import { eventExists, insertEvent } from "../storage/events-repo";
 import { getState, upsertState } from "../storage/state-repo";
 import { getAgent, upsertAgent } from "../storage/agents-repo";
 import { upsertTask, getTask } from "../storage/tasks-repo";
+import { upsertSession } from "../storage/sessions-repo";
 import { nextStatus, getAppSettings } from "../services/state-machine";
 import { broadcast } from "../ws/gateway";
 import { serializeError, summarizeHookBody } from "../utils/logging";
@@ -23,6 +24,13 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
       }
 
       insertEvent(event);
+      upsertSession({
+        workspace_id: event.workspace_id,
+        terminal_session_id: event.terminal_session_id,
+        run_id: event.run_id,
+        last_heartbeat_ts: event.ts,
+        status: "active",
+      });
 
       // Auto-register unknown agents
       if (!getAgent(event.agent_id)) {
