@@ -22,7 +22,7 @@ INSERT INTO integration_hook_errors (
 const listStmt = db.prepare(`
 SELECT * FROM integration_hook_errors
 ORDER BY ts DESC
-LIMIT ?
+LIMIT ? OFFSET ?
 `);
 
 export function insertHookError(input: {
@@ -45,7 +45,6 @@ export function insertHookError(input: {
   });
 }
 
-export function listRecentHookErrors(limit = 5): HookErrorRow[] {
-  return listStmt.all(limit) as HookErrorRow[];
+export function listRecentHookErrors(limit = 5, offset = 0): HookErrorRow[] {
+  return listStmt.all(limit, offset) as HookErrorRow[];
 }
-

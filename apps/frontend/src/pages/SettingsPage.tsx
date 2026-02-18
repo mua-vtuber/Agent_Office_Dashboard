@@ -16,15 +16,17 @@ type IntegrationStatus = {
   collector_reachable: boolean;
   last_hook_event_at: string | null;
   last_hook_event_age_sec: number | null;
-  recent_hook_errors: Array<{
-    id: number;
-    ts: string;
-    reason: string;
-    response_body: string | null;
-  }>;
+  recent_hook_errors: HookErrorItem[];
   issues: string[];
   mode: "normal" | "degraded";
   checked_files: string[];
+};
+
+type HookErrorItem = {
+  id: number;
+  ts: string;
+  reason: string;
+  response_body: string | null;
 };
 
 type InstallResult = {
@@ -80,6 +82,8 @@ export function SettingsPage(): JSX.Element {
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
   const [globalResult, setGlobalResult] = useState<GlobalInstallResult | null>(null);
   const [globalInstalling, setGlobalInstalling] = useState(false);
+  const [hookErrors, setHookErrors] = useState<HookErrorItem[]>([]);
+  const [hookErrorsLoading, setHookErrorsLoading] = useState(false);
   const [draftLanguage, setDraftLanguage] = useState<"ko" | "en">(language);
   const [draftMotion, setDraftMotion] = useState<"low" | "normal" | "high">(motion);
   const [draftLayoutProfile, setDraftLayoutProfile] = useState<string>(defaultSettings.office_layout.layout_profile);
@@ -110,8 +114,24 @@ export function SettingsPage(): JSX.Element {
     try {
       const json = await apiGet<IntegrationStatus>("/api/integration/status");
       setStatus(json);
+      setHookErrors(json.recent_hook_errors ?? []);
     } catch (e) {
       pushError(t("settings_hooks_title"), e instanceof Error ? e.message : "failed to load integration status");
+    }
+  };
+
+  const loadMoreHookErrors = async (): Promise<void> => {
+    setHookErrorsLoading(true);
+    try {
+      const json = await apiGet<{ errors?: HookErrorItem[] }>(
+        `/api/integration/hook-errors?limit=20&offset=${hookErrors.length}`
+      );
+      const next = Array.isArray(json.errors) ? json.errors : [];
+      setHookErrors((prev) => [...prev, ...next]);
+    } catch (e) {
+      pushError(t("settings_hooks_title"), e instanceof Error ? e.message : "failed to load hook errors");
+    } finally {
+      setHookErrorsLoading(false);
     }
   };
 
@@ -295,16 +315,22 @@ export function SettingsPage(): JSX.Element {
                   <li key={issue}>{integrationIssueLabel(issue)}</li>
                 ))}
               </ul>
-              {status.recent_hook_errors.length > 0 ? (
+              {hookErrors.length > 0 ? (
                 <>
                   <p>{t("settings_recent_hook_errors")}:</p>
                   <ul className="compact-list">
-                    {status.recent_hook_errors.slice(0, 3).map((err) => (
+                    {hookErrors.map((err) => (
                       <li key={err.id}>
                         {err.ts} | {err.reason}
+                        {err.response_body ? <pre style={{ whiteSpace: "pre-wrap", margin: "4px 0 0" }}>{err.response_body}</pre> : null}
                       </li>
                     ))}
                   </ul>
+                  <div className="action-row">
+                    <button className="list-btn" onClick={() => void loadMoreHookErrors()} disabled={hookErrorsLoading}>
+                      {hookErrorsLoading ? t("common_loading") : t("settings_load_more_hook_errors")}
+                    </button>
+                  </div>
                 </>
               ) : null}
               <p>{t("settings_checked_files")}:</p>

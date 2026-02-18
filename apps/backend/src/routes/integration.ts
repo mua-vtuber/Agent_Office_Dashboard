@@ -80,6 +80,20 @@ function checkStatus(root: string): IntegrationStatus {
   };
 }
 
+function maskSensitiveText(input: string | null, maskingKeys: string[]): string | null {
+  if (!input) return null;
+  let out = input;
+  for (const key of maskingKeys) {
+    if (!key) continue;
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const quoted = new RegExp(`("${escaped}"\\s*:\\s*")[^"]*(")`, "gi");
+    const plain = new RegExp(`(${escaped}\\s*[=:]\\s*)[^\\s,;]+`, "gi");
+    out = out.replace(quoted, `$1***$2`);
+    out = out.replace(plain, `$1***`);
+  }
+  return out;
+}
+
 type HookEntry = { matcher?: string; command?: string; hooks?: Array<{ type?: string; command?: string }> };
 type HooksMap = Record<string, HookEntry[]>;
 type SettingsFile = Record<string, unknown> & { hooks?: HooksMap };
@@ -216,6 +230,23 @@ export async function registerIntegrationRoutes(app: FastifyInstance): Promise<v
   app.get("/api/integration/status", async () => {
     const root = workspaceRoot();
     return checkStatus(root);
+  });
+
+  app.get("/api/integration/hook-errors", async (request) => {
+    const query = request.query as { limit?: string; offset?: string };
+    const limitRaw = Number(query.limit ?? 20);
+    const offsetRaw = Number(query.offset ?? 0);
+    const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.floor(limitRaw))) : 20;
+    const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0;
+
+    const settings = getMergedSettings();
+    const maskingKeys = settings.connection.masking_keys;
+    const rows = listRecentHookErrors(limit, offset).map((row) => ({
+      ...row,
+      response_body: maskSensitiveText(row.response_body, maskingKeys),
+    }));
+
+    return { errors: rows, limit, offset };
   });
 
   app.post("/api/integration/hooks/install", async (request) => {
