@@ -15,6 +15,8 @@ type IntegrationStatus = {
   last_checked_at: string;
   collector_reachable: boolean;
   last_hook_event_at: string | null;
+  last_hook_event_age_sec: number | null;
+  issues: string[];
   mode: "normal" | "degraded";
   checked_files: string[];
 };
@@ -89,6 +91,13 @@ export function SettingsPage(): JSX.Element {
 
   const hasDirty =
     draftLanguage !== language || draftMotion !== motion || currentLayoutProfile !== savedLayoutProfile;
+
+  const integrationIssueLabel = (issue: string): string => {
+    if (issue === "hooks_not_configured") return t("integration_issue_hooks_not_configured");
+    if (issue === "no_hook_events") return t("integration_issue_no_hook_events");
+    if (issue === "hook_events_stale") return t("integration_issue_hook_events_stale");
+    return issue;
+  };
 
   const refreshStatus = async (): Promise<void> => {
     try {
@@ -271,6 +280,14 @@ export function SettingsPage(): JSX.Element {
               <p>{t("settings_hooks_configured")}: {String(status.hooks_configured)}</p>
               <p>{t("settings_last_checked")}: {status.last_checked_at}</p>
               <p>{t("settings_last_hook_event")}: {status.last_hook_event_at ?? "-"}</p>
+              <p>{t("settings_last_hook_event_age")}: {status.last_hook_event_age_sec ?? "-"}</p>
+              <p>{t("settings_integration_issues")}:</p>
+              <ul className="compact-list">
+                {status.issues.length === 0 ? <li>{t("settings_integration_ok")}</li> : null}
+                {status.issues.map((issue) => (
+                  <li key={issue}>{integrationIssueLabel(issue)}</li>
+                ))}
+              </ul>
               <p>{t("settings_checked_files")}:</p>
               <ul className="compact-list">
                 {status.checked_files.map((f) => (

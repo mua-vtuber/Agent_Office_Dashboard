@@ -59,6 +59,9 @@ const resources = {
       settings_hooks_configured: "hooks 설정 여부",
       settings_last_checked: "마지막 확인",
       settings_last_hook_event: "마지막 hook 이벤트",
+      settings_last_hook_event_age: "마지막 hook 이벤트 경과(초)",
+      settings_integration_issues: "통합 이슈",
+      settings_integration_ok: "이상 없음",
       settings_checked_files: "확인한 파일",
       settings_btn_guide: "설정 가이드 보기",
       settings_btn_install: "자동 설정 시도",
@@ -141,11 +144,17 @@ const resources = {
       settings_transition_to: "To",
       settings_transition_add: "규칙 추가",
       settings_transition_remove: "삭제",
+      settings_transition_validation_title: "규칙 검증 오류",
+      settings_transition_error_duplicate: "{{row}}행과 동일한 규칙이 중복되었습니다.",
+      settings_transition_error_conflict: "동일 조건(from={{from}}, event={{event}})에 서로 다른 to가 있습니다.",
       settings_operations_title: "운영 임계값",
       settings_operations_pending_seconds: "입력 대기 경고 (초)",
       settings_operations_failed_seconds: "실패 경고 (초)",
       settings_operations_stale_seconds: "비활성 경고 (초)",
-      settings_operations_failure_enabled: "실패 알림 활성화"
+      settings_operations_failure_enabled: "실패 알림 활성화",
+      integration_issue_hooks_not_configured: "Hooks 설정이 없습니다",
+      integration_issue_no_hook_events: "hook 이벤트가 아직 수집되지 않았습니다",
+      integration_issue_hook_events_stale: "최근 hook 이벤트가 오래되었습니다"
     }
   },
   en: {
@@ -205,6 +214,9 @@ const resources = {
       settings_hooks_configured: "Hooks configured",
       settings_last_checked: "Last checked",
       settings_last_hook_event: "Last hook event",
+      settings_last_hook_event_age: "Last hook event age (sec)",
+      settings_integration_issues: "Integration issues",
+      settings_integration_ok: "No issues",
       settings_checked_files: "Checked files",
       settings_btn_guide: "Open guide",
       settings_btn_install: "Try auto install",
@@ -287,11 +299,17 @@ const resources = {
       settings_transition_to: "To",
       settings_transition_add: "Add rule",
       settings_transition_remove: "Remove",
+      settings_transition_validation_title: "Rule validation errors",
+      settings_transition_error_duplicate: "Rule is duplicated at row {{row}}.",
+      settings_transition_error_conflict: "Conflicting targets exist for from={{from}}, event={{event}}.",
       settings_operations_title: "Operations Thresholds",
       settings_operations_pending_seconds: "Pending input alert (sec)",
       settings_operations_failed_seconds: "Failed alert (sec)",
       settings_operations_stale_seconds: "Stale agent alert (sec)",
-      settings_operations_failure_enabled: "Enable failure alerts"
+      settings_operations_failure_enabled: "Enable failure alerts",
+      integration_issue_hooks_not_configured: "Hooks are not configured",
+      integration_issue_no_hook_events: "No hook events have been collected yet",
+      integration_issue_hook_events_stale: "Recent hook events are stale"
     }
   }
 };

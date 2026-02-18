@@ -3,13 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { latestHookEventTs } from "../storage/events-repo";
-import { config } from "../config";
+import { getMergedSettings } from "../services/settings-service";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
   last_checked_at: string;
   collector_reachable: boolean;
   last_hook_event_at: string | null;
+  last_hook_event_age_sec: number | null;
+  issues: string[];
   mode: "normal" | "degraded";
   checked_files: string[];
 };
@@ -34,13 +36,35 @@ function hasHookCollectorConfig(filePath: string): boolean {
 function checkStatus(root: string): IntegrationStatus {
   const files = hooksFiles(root);
   const configured = files.some(hasHookCollectorConfig);
+  const lastHookEventAt = latestHookEventTs();
+  const now = Date.now();
+  const lastHookAgeSec = lastHookEventAt
+    ? Math.max(0, Math.floor((now - new Date(lastHookEventAt).getTime()) / 1000))
+    : null;
+
+  const settings = getMergedSettings();
+  const staleThresholdSec = Math.max(
+    settings.session_tracking.heartbeat_interval_sec * 3,
+    settings.operations.stale_agent_seconds
+  );
+
+  const issues: string[] = [];
+  if (!configured) {
+    issues.push("hooks_not_configured");
+  } else if (!lastHookEventAt) {
+    issues.push("no_hook_events");
+  } else if (lastHookAgeSec !== null && lastHookAgeSec > staleThresholdSec) {
+    issues.push("hook_events_stale");
+  }
 
   return {
     hooks_configured: configured,
     last_checked_at: new Date().toISOString(),
     collector_reachable: true,
-    last_hook_event_at: latestHookEventTs(),
-    mode: configured ? "normal" : "degraded",
+    last_hook_event_at: lastHookEventAt,
+    last_hook_event_age_sec: lastHookAgeSec,
+    issues,
+    mode: issues.length === 0 ? "normal" : "degraded",
     checked_files: files
   };
 }

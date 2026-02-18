@@ -25,6 +25,35 @@ export function TransitionRulesEditor(): JSX.Element {
   const [rules, setRules] = useState<TransitionRule[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const validationErrors = (() => {
+    const errors: string[] = [];
+    const exact = new Set<string>();
+    const byPair = new Map<string, Set<string>>();
+
+    rules.forEach((rule, idx) => {
+      const row = idx + 1;
+      const exactKey = `${rule.from}|${rule.event}|${rule.to}`;
+      if (exact.has(exactKey)) {
+        errors.push(t("settings_transition_error_duplicate", { row }));
+      }
+      exact.add(exactKey);
+
+      const pairKey = `${rule.from}|${rule.event}`;
+      const toSet = byPair.get(pairKey) ?? new Set<string>();
+      toSet.add(rule.to);
+      byPair.set(pairKey, toSet);
+    });
+
+    for (const [pair, toSet] of byPair.entries()) {
+      if (toSet.size > 1) {
+        const [from, event] = pair.split("|");
+        errors.push(t("settings_transition_error_conflict", { from, event }));
+      }
+    }
+
+    return errors;
+  })();
+
   useEffect(() => {
     if (settings?.transition_rules) setRules(settings.transition_rules);
   }, [settings]);
@@ -42,6 +71,10 @@ export function TransitionRulesEditor(): JSX.Element {
   };
 
   const save = async (): Promise<void> => {
+    if (validationErrors.length > 0) {
+      pushError(t("settings_transition_title"), validationErrors[0] ?? "invalid transition rules");
+      return;
+    }
     setSaving(true);
     try {
       await update({ transition_rules: rules });
@@ -89,8 +122,18 @@ export function TransitionRulesEditor(): JSX.Element {
           ))}
         </tbody>
       </table>
+      {validationErrors.length > 0 ? (
+        <div className="panel nested" style={{ marginTop: "8px" }}>
+          <p><strong>{t("settings_transition_validation_title")}</strong></p>
+          <ul className="compact-list">
+            {validationErrors.map((msg, idx) => (
+              <li key={`${msg}-${idx}`}>{msg}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       <div className="action-row" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <button className="list-btn" onClick={() => void save()} disabled={saving}>
+        <button className="list-btn" onClick={() => void save()} disabled={saving || validationErrors.length > 0}>
           {saving ? t("common_loading") : t("settings_btn_save")}
         </button>
         <button className="list-btn" onClick={addRule}>{t("settings_transition_add")}</button>

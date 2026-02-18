@@ -52,6 +52,8 @@ type EventContext = {
 
 type IntegrationStatus = {
   hooks_configured: boolean;
+  issues: string[];
+  last_hook_event_age_sec: number | null;
   mode: "normal" | "degraded";
 };
 
@@ -76,6 +78,13 @@ function elapsedSince(isoTs: string): string {
 
 function eventSummary(e: EventRow): string {
   return `${e.ts} | ${e.type} | ${e.agent_id}`;
+}
+
+function issueLabel(issue: string, t: (key: string) => string): string {
+  if (issue === "hooks_not_configured") return t("integration_issue_hooks_not_configured");
+  if (issue === "no_hook_events") return t("integration_issue_no_hook_events");
+  if (issue === "hook_events_stale") return t("integration_issue_hook_events_stale");
+  return issue;
 }
 
 export function DashboardPage(): JSX.Element {
@@ -214,9 +223,12 @@ export function DashboardPage(): JSX.Element {
     <section>
       <h2>{t("dashboard_title")}</h2>
       <p>{t("dashboard_subtitle")}</p>
-      {integration && !integration.hooks_configured ? (
+      {integration && integration.mode !== "normal" ? (
         <div className="hooks-banner">
           {t("dashboard_hooks_missing", { mode: integration.mode })}
+          {Array.isArray(integration.issues) && integration.issues.length > 0 ? (
+            <span> ({integration.issues.map((issue) => issueLabel(issue, t)).join(", ")})</span>
+          ) : null}
           <Link to="/settings"> {t("dashboard_open_settings")}</Link>
         </div>
       ) : null}
