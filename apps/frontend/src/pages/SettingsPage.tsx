@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { apiGet, apiPost, apiPut } from "../lib/api";
+import { apiGet, apiPost } from "../lib/api";
 import { useUiSettingsStore } from "../stores/ui-settings-store";
 import { useErrorStore } from "../stores/error-store";
 import { useTranslation } from "react-i18next";
@@ -8,6 +8,7 @@ import { SeatEditor } from "../components/settings/SeatEditor";
 import { TransitionRulesEditor } from "../components/settings/TransitionRulesEditor";
 import { OperationsSettings } from "../components/settings/OperationsSettings";
 import { defaultSettings } from "@aod/shared-schema";
+import { useAppSettingsStore } from "../stores/app-settings-store";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
@@ -65,6 +66,7 @@ export function SettingsPage(): JSX.Element {
   const language = useUiSettingsStore((s) => s.language);
   const motion = useUiSettingsStore((s) => s.motion);
   const setAllUi = useUiSettingsStore((s) => s.setAll);
+  const updateSettings = useAppSettingsStore((s) => s.update);
   const pushError = useErrorStore((s) => s.push);
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
@@ -72,7 +74,7 @@ export function SettingsPage(): JSX.Element {
   const [globalInstalling, setGlobalInstalling] = useState(false);
   const [draftLanguage, setDraftLanguage] = useState<"ko" | "en">(language);
   const [draftMotion, setDraftMotion] = useState<"low" | "normal" | "high">(motion);
-  const [draftLayoutProfile, setDraftLayoutProfile] = useState<string>("kr_t_left_v2");
+  const [draftLayoutProfile, setDraftLayoutProfile] = useState<string>(defaultSettings.office_layout.layout_profile);
   const [savedLayoutProfile, setSavedLayoutProfile] = useState<string>(defaultSettings.office_layout.layout_profile);
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -108,18 +110,16 @@ export function SettingsPage(): JSX.Element {
       try {
         const json = await apiGet<{
           settings?: {
-            ui_language?: "ko" | "en";
-            ui_motion?: "low" | "normal" | "high";
-            layout_profile?: string;
             general?: { language?: "ko" | "en" };
+            motion_effects?: { motion_intensity?: "low" | "normal" | "high" };
             office_layout?: { layout_profile?: string };
             thought_bubble?: ThoughtBubbleForm;
           };
         }>("/api/settings");
         if (!mounted) return;
-        const serverLanguage = json.settings?.ui_language ?? json.settings?.general?.language ?? language;
-        const serverMotion = json.settings?.ui_motion ?? motion;
-        const serverLayout = json.settings?.layout_profile ?? json.settings?.office_layout?.layout_profile ?? "kr_t_left_v2";
+        const serverLanguage = json.settings?.general?.language ?? language;
+        const serverMotion = json.settings?.motion_effects?.motion_intensity ?? motion;
+        const serverLayout = json.settings?.office_layout?.layout_profile ?? defaultSettings.office_layout.layout_profile;
         setAllUi({ language: serverLanguage, motion: serverMotion });
         void i18n.changeLanguage(serverLanguage);
         setDraftLanguage(serverLanguage);
@@ -146,16 +146,17 @@ export function SettingsPage(): JSX.Element {
     setSaving(true);
     setSaveMessage("");
     try {
-      const json = await apiPut<{ ok?: boolean }>("/api/settings", {
-        settings: {
-          ui_language: draftLanguage,
-          ui_motion: draftMotion,
-          layout_profile: draftLayoutProfile
-        }
+      await updateSettings({
+        general: {
+          language: draftLanguage,
+        },
+        motion_effects: {
+          motion_intensity: draftMotion,
+        },
+        office_layout: {
+          layout_profile: draftLayoutProfile,
+        },
       });
-      if (!json.ok) {
-        throw new Error("failed to save settings");
-      }
       setAllUi({ language: draftLanguage, motion: draftMotion });
       void i18n.changeLanguage(draftLanguage);
       setSavedLayoutProfile(draftLayoutProfile);
@@ -203,10 +204,7 @@ export function SettingsPage(): JSX.Element {
   const saveThoughtBubble = async (): Promise<void> => {
     setTbSaveMsg("");
     try {
-      const result = await apiPut<{ ok?: boolean }>("/api/settings", { settings: { thought_bubble: tbForm } });
-      if (!result.ok) {
-        throw new Error("failed to save thought bubble settings");
-      }
+      await updateSettings({ thought_bubble: tbForm });
       setTbSaveMsg(t("settings_thought_bubble_save_ok"));
     } catch (e) {
       setTbSaveMsg(t("settings_thought_bubble_save_fail", { error: e instanceof Error ? e.message : "unknown" }));

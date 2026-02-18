@@ -38,8 +38,8 @@ const TERMINAL = "term-1";
 const RUN = "run-001";
 
 // 1. Settings initialization (dynamic speed)
-await put("/api/settings/app", {
-  value: {
+await put("/api/settings", {
+  settings: {
     general: {
       language: "ko",
       timezone: "Asia/Seoul",
@@ -55,7 +55,7 @@ await put("/api/settings/app", {
     office_layout: {
       layout_profile: "kr_t_left_v2",
       seat_positions: {},
-      meeting_spots: [{ id: "m1", x: 40, y: 48 }],
+      meeting_spots: { m1: { x: 40, y: 48 } },
       pantry_zone_enabled: true,
       pantry_door_lane: { x_min: 64, x_max: 78, y_min: 84, y_max: 96 },
       speech_bubble_enabled: true,

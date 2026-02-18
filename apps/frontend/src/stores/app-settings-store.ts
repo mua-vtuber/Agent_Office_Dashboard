@@ -66,6 +66,9 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
   update: async (partial) => {
     try {
       const json = await apiPut<{ ok?: boolean; settings?: Settings }>("/api/settings", { settings: partial });
+      if (!json.ok) {
+        throw new Error("settings update rejected");
+      }
       if (json.settings) {
         set({ settings: json.settings, error: null });
         if (json.settings.connection) {
@@ -76,6 +79,7 @@ export const useAppSettingsStore = create<AppSettingsStore>((set, get) => ({
       const msg = e instanceof Error ? e.message : "failed to update settings";
       set({ error: msg });
       useErrorStore.getState().push("Settings", msg);
+      throw new Error(msg);
     }
   },
 
