@@ -7,6 +7,7 @@ import { ConnectionSettings } from "../components/settings/ConnectionSettings";
 import { SeatEditor } from "../components/settings/SeatEditor";
 import { TransitionRulesEditor } from "../components/settings/TransitionRulesEditor";
 import { OperationsSettings } from "../components/settings/OperationsSettings";
+import { defaultSettings } from "@aod/shared-schema";
 
 type IntegrationStatus = {
   hooks_configured: boolean;
@@ -79,6 +80,8 @@ export function SettingsPage(): JSX.Element {
   // Thought bubble settings
   const [tbForm, setTbForm] = useState<ThoughtBubbleForm>(THOUGHT_BUBBLE_DEFAULTS);
   const [tbSaveMsg, setTbSaveMsg] = useState<string>("");
+  const layoutProfiles = [draftLayoutProfile, defaultSettings.office_layout.layout_profile]
+    .filter((v, i, arr) => !!v && arr.indexOf(v) === i);
 
   const hasDirty =
     draftLanguage !== language || draftMotion !== motion || draftLayoutProfile !== "kr_t_left_v2";
@@ -246,7 +249,11 @@ export function SettingsPage(): JSX.Element {
           <label>
             {t("settings_layout_profile")}
             <select value={draftLayoutProfile} onChange={(e) => setDraftLayoutProfile(e.target.value)}>
-              <option value="kr_t_left_v2">kr_t_left_v2</option>
+              {layoutProfiles.map((profile) => (
+                <option key={profile} value={profile}>
+                  {profile}
+                </option>
+              ))}
             </select>
           </label>
           <p className="settings-hint">{t("settings_layout_profile_help")}</p>

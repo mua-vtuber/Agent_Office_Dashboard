@@ -22,6 +22,14 @@ const boundsSchema = z.object({
   y_max: z.number(),
 });
 
+const officeZonesSchema = z.object({
+  left_cluster: boundsSchema,
+  center_block: boundsSchema,
+  pantry_zone: boundsSchema,
+  meeting_lane: boundsSchema,
+  roam_zone: boundsSchema,
+});
+
 const postCompleteWeightsSchema = z.object({
   roaming: z.number().min(0).max(1),
   breakroom: z.number().min(0).max(1),
@@ -70,8 +78,11 @@ export const settingsSchema = z.object({
   /** §2.3 Office Layout */
   office_layout: z.object({
     layout_profile: z.string().min(1),
-    seat_positions: z.record(z.string(), seatPositionSchema).optional(),
-    meeting_spots: z.record(z.string(), seatPositionSchema).optional(),
+    canvas_width: z.number().int().min(320).max(4096),
+    canvas_height: z.number().int().min(240).max(4096),
+    seat_positions: z.record(z.string(), seatPositionSchema),
+    meeting_spots: z.record(z.string(), seatPositionSchema),
+    zones: officeZonesSchema,
     pantry_zone_enabled: z.boolean(),
     pantry_door_lane: boundsSchema,
     speech_bubble_enabled: z.boolean(),
@@ -148,8 +159,35 @@ export const defaultSettings: Settings = {
   },
   office_layout: {
     layout_profile: "kr_t_left_v2",
-    seat_positions: {},
-    meeting_spots: {},
+    canvas_width: 800,
+    canvas_height: 560,
+    seat_positions: {
+      manager: { x: 20, y: 18 },
+      seat_01: { x: 14, y: 30 },
+      seat_02: { x: 24, y: 30 },
+      seat_03: { x: 14, y: 46 },
+      seat_04: { x: 24, y: 46 },
+      seat_05: { x: 14, y: 62 },
+      seat_06: { x: 24, y: 62 },
+      seat_07: { x: 46, y: 30 },
+      seat_08: { x: 56, y: 30 },
+      seat_09: { x: 46, y: 46 },
+      seat_10: { x: 56, y: 46 },
+      seat_11: { x: 46, y: 62 },
+      seat_12: { x: 56, y: 62 },
+    },
+    meeting_spots: {
+      m_01: { x: 40, y: 34 },
+      m_02: { x: 40, y: 50 },
+      m_03: { x: 40, y: 66 },
+    },
+    zones: {
+      left_cluster: { x_min: 4, x_max: 34, y_min: 10, y_max: 90 },
+      center_block: { x_min: 36, x_max: 66, y_min: 10, y_max: 90 },
+      pantry_zone: { x_min: 76, x_max: 100, y_min: 0, y_max: 100 },
+      meeting_lane: { x_min: 36, x_max: 44, y_min: 25, y_max: 80 },
+      roam_zone: { x_min: 8, x_max: 70, y_min: 12, y_max: 92 },
+    },
     pantry_zone_enabled: true,
     pantry_door_lane: { x_min: 64, x_max: 78, y_min: 84, y_max: 96 },
     speech_bubble_enabled: true,

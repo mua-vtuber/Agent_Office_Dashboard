@@ -1,23 +1,10 @@
 import { useEffect, useState } from "react";
+import { defaultSettings } from "@aod/shared-schema";
 import { useAppSettingsStore, type SeatPosition } from "../../stores/app-settings-store";
 import { useErrorStore } from "../../stores/error-store";
 import { useTranslation } from "react-i18next";
 
-const DEFAULT_SEATS: Record<string, SeatPosition> = {
-  manager:   { x: 20, y: 18 },
-  seat_01:   { x: 14, y: 30 },
-  seat_02:   { x: 24, y: 30 },
-  seat_03:   { x: 14, y: 46 },
-  seat_04:   { x: 24, y: 46 },
-  seat_05:   { x: 14, y: 62 },
-  seat_06:   { x: 24, y: 62 },
-  seat_07:   { x: 46, y: 30 },
-  seat_08:   { x: 56, y: 30 },
-  seat_09:   { x: 46, y: 46 },
-  seat_10:   { x: 56, y: 46 },
-  seat_11:   { x: 46, y: 62 },
-  seat_12:   { x: 56, y: 62 },
-};
+const DEFAULT_SEATS: Record<string, SeatPosition> = defaultSettings.office_layout.seat_positions;
 
 export function SeatEditor(): JSX.Element {
   const { t } = useTranslation();

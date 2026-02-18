@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Application, Container, Graphics, Text } from "pixi.js";
+import { defaultSettings, type Settings } from "@aod/shared-schema";
 import { apiGet } from "../lib/api";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
 import { useAppSettingsStore } from "../stores/app-settings-store";
@@ -9,43 +10,19 @@ import { useTranslation } from "react-i18next";
 import { buildCharacter } from "../lib/character/builder";
 import { CHAR_W } from "../lib/character/types";
 
-/* ---------- Canvas constants ---------- */
-
-const CW = 800;
-const CH = 560;
 const AGENT_R = 10;
 const DEFAULT_MOVE_SPEED = 120;
 
 /* ---------- Types ---------- */
 
 type Point = { x: number; y: number };
-type Bounds = { x1: number; x2: number; y1: number; y2: number };
+type Bounds = { x_min: number; x_max: number; y_min: number; y_max: number };
 type RecentEvent = { id: string; ts: string; type: string; agent_id: string };
-
-/* ---------- Layout constants ---------- */
-
-const DEFAULT_SEAT_POINTS: Point[] = [
-  { x: 20, y: 18 },
-  { x: 14, y: 30 }, { x: 24, y: 30 },
-  { x: 14, y: 46 }, { x: 24, y: 46 },
-  { x: 14, y: 62 }, { x: 24, y: 62 },
-  { x: 46, y: 30 }, { x: 56, y: 30 },
-  { x: 46, y: 46 }, { x: 56, y: 46 },
-  { x: 46, y: 62 }, { x: 56, y: 62 },
-];
-const DEFAULT_MEETING_SPOTS: Point[] = [
-  { x: 40, y: 34 },
-  { x: 40, y: 50 },
-  { x: 40, y: 66 }
-];
-
-const pantryZone: Bounds = { x1: 76, x2: 100, y1: 0, y2: 100 };
-const roamZone: Bounds = { x1: 8, x2: 70, y1: 12, y2: 92 };
 
 /* ---------- Helpers ---------- */
 
-function pxX(pct: number): number { return (pct / 100) * CW; }
-function pxY(pct: number): number { return (pct / 100) * CH; }
+function pxX(pct: number, canvasWidth: number): number { return (pct / 100) * canvasWidth; }
+function pxY(pct: number, canvasHeight: number): number { return (pct / 100) * canvasHeight; }
 
 function hashSeed(input: string): number {
   let h = 0;
@@ -57,24 +34,32 @@ function hashSeed(input: string): number {
 }
 
 function pickInZone(zone: Bounds, seed: number): Point {
-  const rx = ((seed % 1000) / 1000) * (zone.x2 - zone.x1) + zone.x1;
-  const ry = (((seed >> 3) % 1000) / 1000) * (zone.y2 - zone.y1) + zone.y1;
+  const rx = ((seed % 1000) / 1000) * (zone.x_max - zone.x_min) + zone.x_min;
+  const ry = (((seed >> 3) % 1000) / 1000) * (zone.y_max - zone.y_min) + zone.y_min;
   return { x: Number(rx.toFixed(2)), y: Number(ry.toFixed(2)) };
 }
 
 function isManager(id: string): boolean { return id.endsWith("/leader"); }
 
 function seatFor(agent: AgentView, workers: AgentView[], seatPoints: Point[]): Point {
-  if (isManager(agent.agent_id)) return seatPoints[0] ?? { x: 20, y: 18 };
+  if (isManager(agent.agent_id)) return seatPoints[0] ?? { x: 0, y: 0 };
   const idx = workers.findIndex((w) => w.agent_id === agent.agent_id);
-  return seatPoints[(idx % (seatPoints.length - 1)) + 1] ?? seatPoints[1] ?? { x: 14, y: 30 };
+  return seatPoints[(idx % (seatPoints.length - 1)) + 1] ?? seatPoints[1] ?? { x: 0, y: 0 };
 }
 
-function targetFor(agent: AgentView, workers: AgentView[], tick: number, seatPoints: Point[], meetingSpots: Point[]): Point {
+function targetFor(
+  agent: AgentView,
+  workers: AgentView[],
+  tick: number,
+  seatPoints: Point[],
+  meetingSpots: Point[],
+  pantryZone: Bounds,
+  roamZone: Bounds
+): Point {
   const s = agent.status;
   if (s === "meeting" || s === "handoff" || s === "returning") {
     const i = hashSeed(agent.agent_id) % meetingSpots.length;
-    return meetingSpots[i] ?? { x: 40, y: 50 };
+    return meetingSpots[i] ?? seatFor(agent, workers, seatPoints);
   }
   if (s === "breakroom" || s === "offline")
     return pickInZone(pantryZone, hashSeed(`${agent.agent_id}-pantry`));
@@ -249,36 +234,45 @@ function refreshNode(node: AgentNode, agent: AgentView, tbConfig: ThoughtBubbleC
 
 /* ---------- Static scene ---------- */
 
-function drawScene(stage: Container, seatPoints: Point[]): void {
+function drawBounds(bg: Graphics, bounds: Bounds, canvasWidth: number, canvasHeight: number, fillColor: number, alpha: number): void {
+  const x = pxX(bounds.x_min, canvasWidth);
+  const y = pxY(bounds.y_min, canvasHeight);
+  const w = pxX(bounds.x_max - bounds.x_min, canvasWidth);
+  const h = pxY(bounds.y_max - bounds.y_min, canvasHeight);
+  bg.rect(x, y, w, h).fill({ color: fillColor, alpha });
+}
+
+function drawScene(stage: Container, seatPoints: Point[], officeLayout: Settings["office_layout"]): void {
+  const canvasWidth = officeLayout.canvas_width;
+  const canvasHeight = officeLayout.canvas_height;
   const bg = new Graphics();
   // Floor
-  bg.rect(0, 0, CW, CH).fill(0xe8e0d8);
-  // T cluster (left)
-  bg.rect(pxX(4), pxY(10), pxX(30), pxY(80)).fill({ color: 0xd4c8b8, alpha: 0.5 });
-  // Center block
-  bg.rect(pxX(36), pxY(10), pxX(30), pxY(80)).fill({ color: 0xc8bca8, alpha: 0.5 });
-  // Pantry (right)
-  bg.rect(pxX(76), pxY(0), pxX(24), pxY(100)).fill({ color: 0xb8d8c8, alpha: 0.5 });
-  // Meeting lane
-  bg.rect(pxX(36), pxY(25), pxX(8), pxY(55)).fill({ color: 0xa8c8e8, alpha: 0.4 });
+  bg.rect(0, 0, canvasWidth, canvasHeight).fill(0xe8e0d8);
+  drawBounds(bg, officeLayout.zones.left_cluster, canvasWidth, canvasHeight, 0xd4c8b8, 0.5);
+  drawBounds(bg, officeLayout.zones.center_block, canvasWidth, canvasHeight, 0xc8bca8, 0.5);
+  drawBounds(bg, officeLayout.zones.pantry_zone, canvasWidth, canvasHeight, 0xb8d8c8, 0.5);
+  drawBounds(bg, officeLayout.zones.meeting_lane, canvasWidth, canvasHeight, 0xa8c8e8, 0.4);
   stage.addChild(bg);
 
   // Seats
   const seats = new Graphics();
   for (const p of seatPoints) {
-    seats.circle(pxX(p.x), pxY(p.y), 4).fill({ color: 0x999999, alpha: 0.3 });
+    seats.circle(pxX(p.x, canvasWidth), pxY(p.y, canvasHeight), 4).fill({ color: 0x999999, alpha: 0.3 });
   }
   stage.addChild(seats);
 
   // Zone labels
   const ls = { fontSize: 10, fill: "#888888", fontFamily: "sans-serif" };
   const labels: Array<[string, number, number]> = [
-    ["T Cluster", 10, 5], ["Center", 46, 5], ["Pantry", 82, 5], ["Meeting", 37, 21],
+    ["T Cluster", officeLayout.zones.left_cluster.x_min + 1, officeLayout.zones.left_cluster.y_min - 5],
+    ["Center", officeLayout.zones.center_block.x_min + 1, officeLayout.zones.center_block.y_min - 5],
+    ["Pantry", officeLayout.zones.pantry_zone.x_min + 1, officeLayout.zones.pantry_zone.y_min + 5],
+    ["Meeting", officeLayout.zones.meeting_lane.x_min + 1, officeLayout.zones.meeting_lane.y_min - 4],
   ];
   for (const [text, x, y] of labels) {
     const t = new Text({ text, style: ls });
-    t.x = pxX(x);
-    t.y = pxY(y);
+    t.x = pxX(Math.max(0, x), canvasWidth);
+    t.y = pxY(Math.max(0, y), canvasHeight);
     t.alpha = 0.6;
     stage.addChild(t);
   }
@@ -306,18 +300,21 @@ export function OfficePage(): JSX.Element {
   const [focusedEventsLoading, setFocusedEventsLoading] = useState(false);
   const focusedAgentId = searchParams.get("agent_id") ?? "";
   const selectedTerminal = searchParams.get("terminal_session_id") ?? "";
+  const officeLayout = settings?.office_layout ?? defaultSettings.office_layout;
+  const canvasWidth = officeLayout.canvas_width;
+  const canvasHeight = officeLayout.canvas_height;
 
   const seatPoints = useMemo((): Point[] => {
-    const sp = settings?.office_layout?.seat_positions;
-    if (sp && Object.keys(sp).length > 0) return Object.values(sp) as Point[];
-    return DEFAULT_SEAT_POINTS;
-  }, [settings]);
+    return Object.entries(officeLayout.seat_positions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, point]) => point);
+  }, [officeLayout]);
 
   const meetingSpots = useMemo((): Point[] => {
-    const ms = settings?.office_layout?.meeting_spots;
-    if (ms && Object.keys(ms).length > 0) return Object.values(ms) as Point[];
-    return DEFAULT_MEETING_SPOTS;
-  }, [settings]);
+    return Object.entries(officeLayout.meeting_spots)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, point]) => point);
+  }, [officeLayout]);
 
   /* Fetch snapshot + settings */
   useEffect(() => {
@@ -409,9 +406,17 @@ export function OfficePage(): JSX.Element {
     () => agents.filter((a) => !isManager(a.agent_id)).sort((a, b) => a.agent_id.localeCompare(b.agent_id)),
     [agents],
   );
+  const pantryZone = officeLayout.zones.pantry_zone;
+  const roamZone = officeLayout.zones.roam_zone;
   const targets = useMemo(
-    () => Object.fromEntries(agents.map((a) => [a.agent_id, targetFor(a, workers, roamTick, seatPoints, meetingSpots)])),
-    [agents, workers, roamTick, seatPoints, meetingSpots],
+    () =>
+      Object.fromEntries(
+        agents.map((a) => [
+          a.agent_id,
+          targetFor(a, workers, roamTick, seatPoints, meetingSpots, pantryZone, roamZone),
+        ])
+      ),
+    [agents, workers, roamTick, seatPoints, meetingSpots, pantryZone, roamZone],
   );
   const focusedAgent = useMemo(
     () => agents.find((a) => a.agent_id === focusedAgentId) ?? null,
@@ -426,13 +431,13 @@ export function OfficePage(): JSX.Element {
     let destroyed = false;
 
     void (async () => {
-      await app.init({ width: CW, height: CH, background: "#e8e0d8", antialias: true });
+      await app.init({ width: canvasWidth, height: canvasHeight, background: "#e8e0d8", antialias: true });
       if (destroyed) { app.destroy(true); return; }
 
       el.appendChild(app.canvas);
       appRef.current = app;
 
-      drawScene(app.stage, seatPoints);
+      drawScene(app.stage, seatPoints, officeLayout);
       const layer = new Container();
       app.stage.addChild(layer);
       layerRef.current = layer;
@@ -475,7 +480,7 @@ export function OfficePage(): JSX.Element {
       layerRef.current = null;
       if (appRef.current) { appRef.current.destroy(true); appRef.current = null; }
     };
-  }, [seatPoints]);
+  }, [seatPoints, officeLayout, canvasWidth, canvasHeight]);
 
   /* Sync agents -> PixiJS sprites */
   useEffect(() => {
@@ -497,7 +502,7 @@ export function OfficePage(): JSX.Element {
     const tbConfig = tbConfigRef.current;
     for (const agent of agents) {
       const rawTgt = targets[agent.agent_id] ?? seatFor(agent, workers, seatPoints);
-      const tp = { x: pxX(rawTgt.x), y: pxY(rawTgt.y) };
+      const tp = { x: pxX(rawTgt.x, canvasWidth), y: pxY(rawTgt.y, canvasHeight) };
 
       let n = nodes.get(agent.agent_id);
       if (!n) {
@@ -512,14 +517,14 @@ export function OfficePage(): JSX.Element {
       }
       n.root.alpha = focusedAgentId && focusedAgentId !== agent.agent_id ? 0.4 : 1;
     }
-  }, [agents, targets, workers, focusedAgentId, pixiReady, seatPoints]);
+  }, [agents, targets, workers, focusedAgentId, pixiReady, seatPoints, canvasWidth, canvasHeight]);
 
   return (
     <section>
       <h2>{t("office_title")}</h2>
       <p>{t("office_subtitle")}</p>
 
-      <div ref={wrapperRef} className="office-canvas" style={{ width: CW, maxWidth: "100%" }} />
+      <div ref={wrapperRef} className="office-canvas" style={{ width: canvasWidth, maxWidth: "100%" }} />
 
       {focusedAgent ? (
         <article className="panel focus-panel">
