@@ -62,6 +62,7 @@ const resources = {
       settings_last_hook_event_age: "마지막 hook 이벤트 경과(초)",
       settings_integration_issues: "통합 이슈",
       settings_integration_ok: "이상 없음",
+      settings_recent_hook_errors: "최근 hook 전송 오류",
       settings_checked_files: "확인한 파일",
       settings_btn_guide: "설정 가이드 보기",
       settings_btn_install: "자동 설정 시도",
@@ -154,7 +155,8 @@ const resources = {
       settings_operations_failure_enabled: "실패 알림 활성화",
       integration_issue_hooks_not_configured: "Hooks 설정이 없습니다",
       integration_issue_no_hook_events: "hook 이벤트가 아직 수집되지 않았습니다",
-      integration_issue_hook_events_stale: "최근 hook 이벤트가 오래되었습니다"
+      integration_issue_hook_events_stale: "최근 hook 이벤트가 오래되었습니다",
+      integration_issue_hook_delivery_failed: "hook 전송 실패가 감지되었습니다"
     }
   },
   en: {
@@ -217,6 +219,7 @@ const resources = {
       settings_last_hook_event_age: "Last hook event age (sec)",
       settings_integration_issues: "Integration issues",
       settings_integration_ok: "No issues",
+      settings_recent_hook_errors: "Recent hook delivery errors",
       settings_checked_files: "Checked files",
       settings_btn_guide: "Open guide",
       settings_btn_install: "Try auto install",
@@ -309,7 +312,8 @@ const resources = {
       settings_operations_failure_enabled: "Enable failure alerts",
       integration_issue_hooks_not_configured: "Hooks are not configured",
       integration_issue_no_hook_events: "No hook events have been collected yet",
-      integration_issue_hook_events_stale: "Recent hook events are stale"
+      integration_issue_hook_events_stale: "Recent hook events are stale",
+      integration_issue_hook_delivery_failed: "Hook delivery failures were detected"
     }
   }
 };

@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { latestHookEventTs } from "../storage/events-repo";
+import { insertHookError, listRecentHookErrors, type HookErrorRow } from "../storage/hook-errors-repo";
 import { getMergedSettings } from "../services/settings-service";
 
 type IntegrationStatus = {
@@ -11,6 +12,7 @@ type IntegrationStatus = {
   collector_reachable: boolean;
   last_hook_event_at: string | null;
   last_hook_event_age_sec: number | null;
+  recent_hook_errors: HookErrorRow[];
   issues: string[];
   mode: "normal" | "degraded";
   checked_files: string[];
@@ -47,6 +49,11 @@ function checkStatus(root: string): IntegrationStatus {
     settings.session_tracking.heartbeat_interval_sec * 3,
     settings.operations.stale_agent_seconds
   );
+  const recentErrors = listRecentHookErrors(5);
+  const latestError = recentErrors[0];
+  const latestErrorAgeSec = latestError
+    ? Math.max(0, Math.floor((now - new Date(latestError.ts).getTime()) / 1000))
+    : null;
 
   const issues: string[] = [];
   if (!configured) {
@@ -56,6 +63,9 @@ function checkStatus(root: string): IntegrationStatus {
   } else if (lastHookAgeSec !== null && lastHookAgeSec > staleThresholdSec) {
     issues.push("hook_events_stale");
   }
+  if (latestErrorAgeSec !== null && latestErrorAgeSec <= staleThresholdSec) {
+    issues.push("hook_delivery_failed");
+  }
 
   return {
     hooks_configured: configured,
@@ -63,6 +73,7 @@ function checkStatus(root: string): IntegrationStatus {
     collector_reachable: true,
     last_hook_event_at: lastHookEventAt,
     last_hook_event_age_sec: lastHookAgeSec,
+    recent_hook_errors: recentErrors,
     issues,
     mode: issues.length === 0 ? "normal" : "degraded",
     checked_files: files
@@ -174,6 +185,34 @@ function mergeHooksIntoFile(targetPath: string, templateHooks: HooksMap): MergeR
 }
 
 export async function registerIntegrationRoutes(app: FastifyInstance): Promise<void> {
+  app.post("/api/integration/hook-error", async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      workspace_id?: string;
+      terminal_session_id?: string;
+      run_id?: string;
+      reason?: string;
+      response_body?: string;
+      collector_url?: string;
+      ts?: string;
+    };
+
+    if (!body.reason || typeof body.reason !== "string") {
+      reply.code(400);
+      return { ok: false, message: "reason is required" };
+    }
+
+    insertHookError({
+      ts: typeof body.ts === "string" ? body.ts : new Date().toISOString(),
+      workspace_id: typeof body.workspace_id === "string" ? body.workspace_id : null,
+      terminal_session_id: typeof body.terminal_session_id === "string" ? body.terminal_session_id : null,
+      run_id: typeof body.run_id === "string" ? body.run_id : null,
+      reason: body.reason,
+      response_body: typeof body.response_body === "string" ? body.response_body.slice(0, 2000) : null,
+      collector_url: typeof body.collector_url === "string" ? body.collector_url : null,
+    });
+    return { ok: true };
+  });
+
   app.get("/api/integration/status", async () => {
     const root = workspaceRoot();
     return checkStatus(root);

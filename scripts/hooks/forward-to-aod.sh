@@ -9,6 +9,7 @@ if [ -z "${payload}" ]; then
 fi
 
 collector_url="${AOD_COLLECTOR_URL:-http://127.0.0.1:4800/ingest/hooks}"
+integration_error_url="${AOD_INTEGRATION_ERROR_URL:-${collector_url%/ingest/hooks}/api/integration/hook-error}"
 workspace_id="${AOD_WORKSPACE_ID:-$(basename "${PWD:-unknown-workspace}")}"
 tty_raw="$(tty 2>/dev/null || true)"
 tty_id=""
@@ -84,9 +85,52 @@ if [ -z "${enriched_payload}" ]; then
   exit 1
 fi
 
-curl_args=(
+build_error_payload() {
+  python3 - "$workspace_id" "$terminal_session_id" "$run_id" "$1" "$2" "$collector_url" "$collected_at" <<'PY'
+import json
+import sys
+
+workspace_id, terminal_session_id, run_id, reason, response_body, collector_url, ts = sys.argv[1:]
+print(json.dumps({
+    "workspace_id": workspace_id or None,
+    "terminal_session_id": terminal_session_id or None,
+    "run_id": run_id or None,
+    "reason": reason,
+    "response_body": response_body[:2000],
+    "collector_url": collector_url,
+    "ts": ts
+}, ensure_ascii=False))
+PY
+}
+
+report_hook_error() {
+  local reason="$1"
+  local response_body="${2:-}"
+  local error_payload
+  error_payload="$(build_error_payload "$reason" "$response_body")"
+
+  local report_args=(
+    -sS
+    -m 2
+    -X POST
+    "$integration_error_url"
+    -H "Content-Type: application/json"
+    -d "$error_payload"
+  )
+  if [ -n "${DASHBOARD_TOKEN:-}" ]; then
+    report_args+=( -H "Authorization: Bearer ${DASHBOARD_TOKEN}" )
+  fi
+
+  if ! curl "${report_args[@]}" >/dev/null; then
+    echo "[AOD hook] failed to report hook error: ${reason}" >&2
+  fi
+}
+
+post_args=(
   -sS
   -m 2
+  -o /tmp/aod-hook-response.$$
+  -w "%{http_code}"
   -X POST
   "$collector_url"
   -H "Content-Type: application/json"
@@ -94,8 +138,26 @@ curl_args=(
 )
 
 if [ -n "${DASHBOARD_TOKEN:-}" ]; then
-  curl_args+=( -H "Authorization: Bearer ${DASHBOARD_TOKEN}" )
+  post_args+=( -H "Authorization: Bearer ${DASHBOARD_TOKEN}" )
 fi
 
-curl "${curl_args[@]}" >/dev/null
+http_code=""
+if ! http_code="$(curl "${post_args[@]}")"; then
+  curl_rc=$?
+  response_body="$(cat /tmp/aod-hook-response.$$ 2>/dev/null || true)"
+  rm -f /tmp/aod-hook-response.$$
+  report_hook_error "collector request failed (curl exit ${curl_rc})" "$response_body"
+  echo "[AOD hook] collector request failed (curl exit ${curl_rc})" >&2
+  exit 1
+fi
+
+response_body="$(cat /tmp/aod-hook-response.$$ 2>/dev/null || true)"
+rm -f /tmp/aod-hook-response.$$
+
+if [[ ! "${http_code}" =~ ^2[0-9][0-9]$ ]]; then
+  report_hook_error "collector returned HTTP ${http_code}" "$response_body"
+  echo "[AOD hook] collector returned HTTP ${http_code}" >&2
+  exit 1
+fi
+
 exit 0

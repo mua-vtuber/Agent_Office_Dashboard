@@ -84,6 +84,20 @@ CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value_json TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS integration_hook_errors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts TEXT NOT NULL,
+  workspace_id TEXT,
+  terminal_session_id TEXT,
+  run_id TEXT,
+  reason TEXT NOT NULL,
+  response_body TEXT,
+  collector_url TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_integration_hook_errors_ts
+ON integration_hook_errors (ts DESC);
 `);
 
 // --- Migration v1: extend state_current with home_position, since, context ---
@@ -109,4 +123,26 @@ const v2Version = v2Row?.user_version ?? 0;
 if (v2Version < 2) {
   db.exec("ALTER TABLE state_current ADD COLUMN thinking_text TEXT DEFAULT NULL;");
   db.exec("PRAGMA user_version = 2");
+}
+
+// --- Migration v3: integration hook error audit table ---
+const v3Row = db.prepare("PRAGMA user_version").get() as { user_version: number } | undefined;
+const v3Version = v3Row?.user_version ?? 0;
+
+if (v3Version < 3) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS integration_hook_errors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts TEXT NOT NULL,
+      workspace_id TEXT,
+      terminal_session_id TEXT,
+      run_id TEXT,
+      reason TEXT NOT NULL,
+      response_body TEXT,
+      collector_url TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_integration_hook_errors_ts
+    ON integration_hook_errors (ts DESC);
+  `);
+  db.exec("PRAGMA user_version = 3");
 }

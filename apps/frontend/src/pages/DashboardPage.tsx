@@ -54,6 +54,7 @@ type IntegrationStatus = {
   hooks_configured: boolean;
   issues: string[];
   last_hook_event_age_sec: number | null;
+  recent_hook_errors: Array<{ id: number; ts: string; reason: string }>;
   mode: "normal" | "degraded";
 };
 
@@ -84,6 +85,7 @@ function issueLabel(issue: string, t: (key: string) => string): string {
   if (issue === "hooks_not_configured") return t("integration_issue_hooks_not_configured");
   if (issue === "no_hook_events") return t("integration_issue_no_hook_events");
   if (issue === "hook_events_stale") return t("integration_issue_hook_events_stale");
+  if (issue === "hook_delivery_failed") return t("integration_issue_hook_delivery_failed");
   return issue;
 }
 

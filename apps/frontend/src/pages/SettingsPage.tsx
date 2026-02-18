@@ -16,6 +16,12 @@ type IntegrationStatus = {
   collector_reachable: boolean;
   last_hook_event_at: string | null;
   last_hook_event_age_sec: number | null;
+  recent_hook_errors: Array<{
+    id: number;
+    ts: string;
+    reason: string;
+    response_body: string | null;
+  }>;
   issues: string[];
   mode: "normal" | "degraded";
   checked_files: string[];
@@ -96,6 +102,7 @@ export function SettingsPage(): JSX.Element {
     if (issue === "hooks_not_configured") return t("integration_issue_hooks_not_configured");
     if (issue === "no_hook_events") return t("integration_issue_no_hook_events");
     if (issue === "hook_events_stale") return t("integration_issue_hook_events_stale");
+    if (issue === "hook_delivery_failed") return t("integration_issue_hook_delivery_failed");
     return issue;
   };
 
@@ -288,6 +295,18 @@ export function SettingsPage(): JSX.Element {
                   <li key={issue}>{integrationIssueLabel(issue)}</li>
                 ))}
               </ul>
+              {status.recent_hook_errors.length > 0 ? (
+                <>
+                  <p>{t("settings_recent_hook_errors")}:</p>
+                  <ul className="compact-list">
+                    {status.recent_hook_errors.slice(0, 3).map((err) => (
+                      <li key={err.id}>
+                        {err.ts} | {err.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
               <p>{t("settings_checked_files")}:</p>
               <ul className="compact-list">
                 {status.checked_files.map((f) => (
