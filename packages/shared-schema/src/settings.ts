@@ -22,6 +22,14 @@ const boundsSchema = z.object({
   y_max: z.number(),
 });
 
+const deskSchema = z.object({
+  id: z.string().min(1),
+  x_min: z.number(),
+  x_max: z.number(),
+  y_min: z.number(),
+  y_max: z.number(),
+});
+
 const officeZonesSchema = z.object({
   left_cluster: boundsSchema,
   center_block: boundsSchema,
@@ -81,7 +89,8 @@ export const settingsSchema = z.object({
     canvas_width: z.number().int().min(320).max(4096),
     canvas_height: z.number().int().min(240).max(4096),
     seat_positions: z.record(z.string(), seatPositionSchema),
-    meeting_spots: z.record(z.string(), seatPositionSchema),
+    meeting_spots: z.record(z.string(), seatPositionSchema).default({}),
+    desks: z.array(deskSchema).default([]),
     zones: officeZonesSchema,
     pantry_zone_enabled: z.boolean(),
     pantry_door_lane: boundsSchema,
@@ -140,6 +149,7 @@ export const settingsSchema = z.object({
 
 export type Settings = z.infer<typeof settingsSchema>;
 export type SeatPosition = z.infer<typeof seatPositionSchema>;
+export type Desk = z.infer<typeof deskSchema>;
 export type TransitionRule = z.infer<typeof transitionRuleSchema>;
 
 // --- Default values (settings-spec.md §3) ---
@@ -162,30 +172,47 @@ export const defaultSettings: Settings = {
     canvas_width: 800,
     canvas_height: 560,
     seat_positions: {
-      manager: { x: 20, y: 18 },
-      seat_01: { x: 14, y: 30 },
-      seat_02: { x: 24, y: 30 },
-      seat_03: { x: 14, y: 46 },
-      seat_04: { x: 24, y: 46 },
-      seat_05: { x: 14, y: 62 },
-      seat_06: { x: 24, y: 62 },
-      seat_07: { x: 46, y: 30 },
-      seat_08: { x: 56, y: 30 },
-      seat_09: { x: 46, y: 46 },
-      seat_10: { x: 56, y: 46 },
-      seat_11: { x: 46, y: 62 },
-      seat_12: { x: 56, y: 62 },
+      /* 팀장: T자 상단 가로 책상 아래 */
+      manager: { x: 19, y: 18 },
+      /* 왼쪽 T열: 4줄, 각 줄 좌(→)·우(←) 마주보기 */
+      seat_01: { x: 10, y: 30 },  /* L1 왼쪽 → */
+      seat_02: { x: 28, y: 30 },  /* L1 오른쪽 ← */
+      seat_03: { x: 10, y: 43 },  /* L2 왼쪽 → */
+      seat_04: { x: 28, y: 43 },  /* L2 오른쪽 ← */
+      seat_05: { x: 10, y: 56 },  /* L3 왼쪽 → */
+      seat_06: { x: 28, y: 56 },  /* L3 오른쪽 ← */
+      seat_07: { x: 10, y: 69 },  /* L4 왼쪽 → */
+      seat_08: { x: 28, y: 69 },  /* L4 오른쪽 ← */
+      /* 오른쪽 I열: 4줄, 동일 마주보기 */
+      seat_09: { x: 46, y: 30 },  /* R1 왼쪽 → */
+      seat_10: { x: 64, y: 30 },  /* R1 오른쪽 ← */
+      seat_11: { x: 46, y: 43 },  /* R2 왼쪽 → */
+      seat_12: { x: 64, y: 43 },  /* R2 오른쪽 ← */
+      seat_13: { x: 46, y: 56 },  /* R3 왼쪽 → */
+      seat_14: { x: 64, y: 56 },  /* R3 오른쪽 ← */
+      seat_15: { x: 46, y: 69 },  /* R4 왼쪽 → */
+      seat_16: { x: 64, y: 69 },  /* R4 오른쪽 ← */
     },
-    meeting_spots: {
-      m_01: { x: 40, y: 34 },
-      m_02: { x: 40, y: 50 },
-      m_03: { x: 40, y: 66 },
-    },
+    meeting_spots: {},
+    desks: [
+      /* 팀장 책상 — T자 가로 막대 */
+      { id: "desk_mgr", x_min: 13, x_max: 25, y_min: 11, y_max: 15 },
+      /* 왼쪽 T열: 세로 책상 4개 (좌우 마주보기 사이 칸막이) */
+      { id: "desk_L1", x_min: 17, x_max: 21, y_min: 26, y_max: 34 },
+      { id: "desk_L2", x_min: 17, x_max: 21, y_min: 39, y_max: 47 },
+      { id: "desk_L3", x_min: 17, x_max: 21, y_min: 52, y_max: 60 },
+      { id: "desk_L4", x_min: 17, x_max: 21, y_min: 65, y_max: 73 },
+      /* 오른쪽 I열: 세로 책상 4개 */
+      { id: "desk_R1", x_min: 53, x_max: 57, y_min: 26, y_max: 34 },
+      { id: "desk_R2", x_min: 53, x_max: 57, y_min: 39, y_max: 47 },
+      { id: "desk_R3", x_min: 53, x_max: 57, y_min: 52, y_max: 60 },
+      { id: "desk_R4", x_min: 53, x_max: 57, y_min: 65, y_max: 73 },
+    ],
     zones: {
-      left_cluster: { x_min: 4, x_max: 34, y_min: 10, y_max: 90 },
-      center_block: { x_min: 36, x_max: 66, y_min: 10, y_max: 90 },
+      left_cluster: { x_min: 4, x_max: 34, y_min: 6, y_max: 80 },
+      center_block: { x_min: 38, x_max: 70, y_min: 20, y_max: 80 },
       pantry_zone: { x_min: 76, x_max: 100, y_min: 0, y_max: 100 },
-      meeting_lane: { x_min: 36, x_max: 44, y_min: 25, y_max: 80 },
+      meeting_lane: { x_min: 0, x_max: 0, y_min: 0, y_max: 0 },
       roam_zone: { x_min: 8, x_max: 70, y_min: 12, y_max: 92 },
     },
     pantry_zone_enabled: true,

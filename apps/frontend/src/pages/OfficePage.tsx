@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Application, Container, Graphics, Text } from "pixi.js";
-import { defaultSettings, type Settings } from "@aod/shared-schema";
+import { defaultSettings, type Settings, type Desk } from "@aod/shared-schema";
 import { apiGet } from "../lib/api";
 import { useAgentStore, type AgentView } from "../stores/agent-store";
 import { useAppSettingsStore } from "../stores/app-settings-store";
@@ -10,7 +10,7 @@ import { useTranslation } from "react-i18next";
 import { buildCharacter } from "../lib/character/builder";
 import { CHAR_W } from "../lib/character/types";
 
-const AGENT_R = 10;
+const AGENT_R = 30;
 const DEFAULT_MOVE_SPEED = 120;
 
 /* ---------- Types ---------- */
@@ -33,10 +33,23 @@ function hashSeed(input: string): number {
   return Math.abs(h);
 }
 
-function pickInZone(zone: Bounds, seed: number): Point {
-  const rx = ((seed % 1000) / 1000) * (zone.x_max - zone.x_min) + zone.x_min;
-  const ry = (((seed >> 3) % 1000) / 1000) * (zone.y_max - zone.y_min) + zone.y_min;
-  return { x: Number(rx.toFixed(2)), y: Number(ry.toFixed(2)) };
+function isInsideDesk(p: Point, desks: Desk[]): boolean {
+  return desks.some((d) => p.x >= d.x_min && p.x <= d.x_max && p.y >= d.y_min && p.y <= d.y_max);
+}
+
+function pickInZone(zone: Bounds, seed: number, desks: Desk[] = []): Point {
+  for (let i = 0; i < 10; i++) {
+    const s = seed + i * 7919;
+    const rx = ((s % 1000) / 1000) * (zone.x_max - zone.x_min) + zone.x_min;
+    const ry = (((s >> 3) % 1000) / 1000) * (zone.y_max - zone.y_min) + zone.y_min;
+    const pt = { x: Number(rx.toFixed(2)), y: Number(ry.toFixed(2)) };
+    if (!isInsideDesk(pt, desks)) return pt;
+  }
+  // Fallback: zone center
+  return {
+    x: Number(((zone.x_min + zone.x_max) / 2).toFixed(2)),
+    y: Number(((zone.y_min + zone.y_max) / 2).toFixed(2)),
+  };
 }
 
 function isManager(id: string): boolean { return id.endsWith("/leader"); }
@@ -62,24 +75,15 @@ function targetFor(
   workers: AgentView[],
   tick: number,
   seatPoints: Point[],
-  meetingSpots: Point[],
   pantryZone: Bounds,
-  roamZone: Bounds
+  roamZone: Bounds,
+  desks: Desk[]
 ): Point {
   const s = agent.status;
-  if (s === "meeting" || s === "handoff" || s === "returning") {
-    const i = hashSeed(agent.agent_id) % meetingSpots.length;
-    const spot = meetingSpots[i] ?? seatFor(agent, workers, seatPoints);
-    // Offset agents within the same meeting spot so they don't stack exactly
-    const seed = hashSeed(agent.agent_id + "-meet");
-    const angle = ((seed % 360) * Math.PI) / 180;
-    const radius = 1 + (seed % 3);
-    return { x: spot.x + Math.cos(angle) * radius, y: spot.y + Math.sin(angle) * radius };
-  }
   if (s === "breakroom" || s === "offline")
-    return pickInZone(pantryZone, hashSeed(`${agent.agent_id}-pantry`));
+    return pickInZone(pantryZone, hashSeed(`${agent.agent_id}-pantry`), desks);
   if (s === "roaming" || s === "completed")
-    return pickInZone(roamZone, hashSeed(`${agent.agent_id}-roam-${tick}`));
+    return pickInZone(roamZone, hashSeed(`${agent.agent_id}-roam-${tick}`), desks);
   return seatFor(agent, workers, seatPoints);
 }
 
@@ -125,8 +129,6 @@ function resolveBubbleText(thinking: string | null, status: string, config: Thou
 type AgentNode = {
   root: Container;
   body: Container;
-  ring: Graphics;
-  statusOverlay: Graphics;
   nameText: Text;
   effectText: Text;
   bubble: Container;
@@ -143,23 +145,12 @@ function createNode(agent: AgentView, pos: Point, tbConfig: ThoughtBubbleConfig)
   root.x = pos.x;
   root.y = pos.y;
 
-  // Pulsing ring for working status
-  const ring = new Graphics();
-  ring.circle(0, 0, AGENT_R + 4).stroke({ color: 0x4caf50, width: 2, alpha: 0.6 });
-  ring.visible = agent.status === "working";
-  root.addChild(ring);
-
   // Fallback body circle (shown until character loads)
   const fallback = new Container();
   const fallbackGfx = new Graphics();
   fallbackGfx.circle(0, 0, AGENT_R).fill(statusColor(agent.status));
   fallback.addChild(fallbackGfx);
   root.addChild(fallback);
-
-  // Status overlay glow (drawn on top of character)
-  const statusOverlay = new Graphics();
-  statusOverlay.circle(0, 0, AGENT_R + 2).stroke({ color: statusColor(agent.status), width: 2, alpha: 0.7 });
-  root.addChild(statusOverlay);
 
   // Agent name
   const shortName = (agent.agent_id.split("/").at(-1) ?? agent.agent_id).slice(0, 10);
@@ -187,7 +178,7 @@ function createNode(agent: AgentView, pos: Point, tbConfig: ThoughtBubbleConfig)
   root.addChild(bubble);
   applyBubble(bubble, bubbleBg, bubbleTxt, agent.thinking, agent.status, tbConfig);
 
-  const node: AgentNode = { root, body: fallback, ring, statusOverlay, nameText, effectText, bubble, bubbleBg, bubbleTxt, cur: { ...pos }, tgt: { ...pos }, status: agent.status, thinking: agent.thinking };
+  const node: AgentNode = { root, body: fallback, nameText, effectText, bubble, bubbleBg, bubbleTxt, cur: { ...pos }, tgt: { ...pos }, status: agent.status, thinking: agent.thinking };
 
   // Async: load character sprite and replace fallback
   const charScale = (AGENT_R * 2) / CHAR_W;
@@ -239,10 +230,6 @@ function applyBubble(container: Container, bg: Graphics, txt: Text, thinking: st
 }
 
 function refreshNode(node: AgentNode, agent: AgentView, tbConfig: ThoughtBubbleConfig): void {
-  // Update status overlay glow (character sprite itself is immutable)
-  node.statusOverlay.clear();
-  node.statusOverlay.circle(0, 0, AGENT_R + 2).stroke({ color: statusColor(agent.status), width: 2, alpha: 0.7 });
-  node.ring.visible = agent.status === "working";
   node.effectText.text = effectLabel(agent.status);
   applyBubble(node.bubble, node.bubbleBg, node.bubbleTxt, agent.thinking, agent.status, tbConfig);
   node.status = agent.status;
@@ -268,8 +255,18 @@ function drawScene(stage: Container, seatPoints: Point[], officeLayout: Settings
   drawBounds(bg, officeLayout.zones.left_cluster, canvasWidth, canvasHeight, 0xd4c8b8, 0.5);
   drawBounds(bg, officeLayout.zones.center_block, canvasWidth, canvasHeight, 0xc8bca8, 0.5);
   drawBounds(bg, officeLayout.zones.pantry_zone, canvasWidth, canvasHeight, 0xb8d8c8, 0.5);
-  drawBounds(bg, officeLayout.zones.meeting_lane, canvasWidth, canvasHeight, 0xa8c8e8, 0.4);
   stage.addChild(bg);
+
+  // Desks
+  const deskGfx = new Graphics();
+  for (const desk of officeLayout.desks ?? []) {
+    const dx = pxX(desk.x_min, canvasWidth);
+    const dy = pxY(desk.y_min, canvasHeight);
+    const dw = pxX(desk.x_max - desk.x_min, canvasWidth);
+    const dh = pxY(desk.y_max - desk.y_min, canvasHeight);
+    deskGfx.rect(dx, dy, dw, dh).fill({ color: 0x8b7355, alpha: 0.6 });
+  }
+  stage.addChild(deskGfx);
 
   // Seats
   const seats = new Graphics();
@@ -284,7 +281,6 @@ function drawScene(stage: Container, seatPoints: Point[], officeLayout: Settings
     ["T Cluster", officeLayout.zones.left_cluster.x_min + 1, officeLayout.zones.left_cluster.y_min - 5],
     ["Center", officeLayout.zones.center_block.x_min + 1, officeLayout.zones.center_block.y_min - 5],
     ["Pantry", officeLayout.zones.pantry_zone.x_min + 1, officeLayout.zones.pantry_zone.y_min + 5],
-    ["Meeting", officeLayout.zones.meeting_lane.x_min + 1, officeLayout.zones.meeting_lane.y_min - 4],
   ];
   for (const [text, x, y] of labels) {
     const t = new Text({ text, style: ls });
@@ -327,11 +323,7 @@ export function OfficePage(): JSX.Element {
       .map(([, point]) => point);
   }, [officeLayout]);
 
-  const meetingSpots = useMemo((): Point[] => {
-    return Object.entries(officeLayout.meeting_spots)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, point]) => point);
-  }, [officeLayout]);
+  const desks = officeLayout.desks ?? [];
 
   useEffect(() => {
     moveSpeedRef.current = settings?.operations?.move_speed_px_per_sec ?? DEFAULT_MOVE_SPEED;
@@ -410,10 +402,10 @@ export function OfficePage(): JSX.Element {
       Object.fromEntries(
         agents.map((a) => [
           a.agent_id,
-          targetFor(a, workers, roamTick, seatPoints, meetingSpots, pantryZone, roamZone),
+          targetFor(a, workers, roamTick, seatPoints, pantryZone, roamZone, desks),
         ])
       ),
-    [agents, workers, roamTick, seatPoints, meetingSpots, pantryZone, roamZone],
+    [agents, workers, roamTick, seatPoints, pantryZone, roamZone, desks],
   );
   const focusedAgent = useMemo(
     () => agents.find((a) => a.agent_id === focusedAgentId) ?? null,
@@ -440,15 +432,11 @@ export function OfficePage(): JSX.Element {
       app.stage.addChild(layer);
       layerRef.current = layer;
 
-      // Movement + ring pulse ticker
-      let elapsed = 0;
+      // Movement ticker
       app.ticker.add((ticker) => {
         const dt = ticker.deltaMS / 1000;
-        elapsed += dt;
-        const ringAlpha = 0.3 + 0.3 * Math.sin(elapsed * 4);
 
         for (const [, n] of nodesRef.current) {
-          // Smooth movement
           const dx = n.tgt.x - n.cur.x;
           const dy = n.tgt.y - n.cur.y;
           const dist = Math.hypot(dx, dy);
@@ -463,9 +451,6 @@ export function OfficePage(): JSX.Element {
           n.root.x = n.cur.x;
           n.root.y = n.cur.y;
           n.root.zIndex = Math.floor(n.cur.y);
-
-          // Pulse ring for working agents
-          if (n.ring.visible) n.ring.alpha = ringAlpha;
         }
       });
 

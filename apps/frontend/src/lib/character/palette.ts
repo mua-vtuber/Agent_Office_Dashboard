@@ -106,7 +106,9 @@ export async function swapPalette(
   svgUrl: string,
   colorMap: Record<string, string>,
 ): Promise<Texture> {
-  let svg = await fetch(svgUrl).then((r) => r.text());
+  const resp = await fetch(svgUrl);
+  if (!resp.ok) throw new Error(`Failed to fetch SVG: ${resp.status} ${svgUrl}`);
+  let svg = await resp.text();
 
   svg = normalizeSvgColors(svg);
 
@@ -114,10 +116,9 @@ export async function swapPalette(
     svg = svg.replaceAll(marker, replacement);
   }
 
-  const blob = new Blob([svg], { type: "image/svg+xml" });
-  const objectUrl = URL.createObjectURL(blob);
-  const texture = await Assets.load(objectUrl);
-  URL.revokeObjectURL(objectUrl);
+  // Load SVG as data URI to avoid blob URL revocation race
+  const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+  const texture = await Assets.load(dataUri);
 
   return texture;
 }
