@@ -64,6 +64,14 @@ export function generateColorHex(rand: () => number): number {
   return hslToHex(h, s, l);
 }
 
+/** Generate a pastel skin color — high lightness, low-mid saturation for soft AI tones */
+export function generatePastelSkinHex(rand: () => number): number {
+  const h = Math.floor(rand() * 360);
+  const s = 25 + Math.floor(rand() * 30);  // 25-54 (soft)
+  const l = 75 + Math.floor(rand() * 15);  // 75-89 (bright pastel)
+  return hslToHex(h, s, l);
+}
+
 /** Build a color map from marker colors to replacement hex strings */
 export function buildColorMap(colors: number[]): Record<string, string> {
   const map: Record<string, string> = {};

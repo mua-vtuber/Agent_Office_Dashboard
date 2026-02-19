@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 50">
+  <defs>
+    <linearGradient id="sinkGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d0d0d4"/>
+      <stop offset="100%" stop-color="#b8b8bc"/>
+    </linearGradient>
+    <radialGradient id="basinGrad" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#909098"/>
+      <stop offset="70%" stop-color="#a0a0a8"/>
+      <stop offset="100%" stop-color="#b0b0b8"/>
+    </radialGradient>
+    <filter id="sinkShadow">
+      <feDropShadow dx="1" dy="1.5" stdDeviation="1.5" flood-color="#505058" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+  <!-- Counter surface -->
+  <rect x="2" y="2" width="56" height="46" rx="2" fill="url(#sinkGrad)" filter="url(#sinkShadow)" stroke="#a0a0a8" stroke-width="0.6"/>
+  <!-- Basin (oval depression) -->
+  <ellipse cx="30" cy="28" rx="20" ry="14" fill="url(#basinGrad)" stroke="#888890" stroke-width="0.6"/>
+  <!-- Basin inner ring -->
+  <ellipse cx="30" cy="28" rx="16" ry="10" fill="none" stroke="#a0a0a8" stroke-width="0.4" opacity="0.5"/>
+  <!-- Drain -->
+  <circle cx="30" cy="30" r="2" fill="#606068" stroke="#505058" stroke-width="0.4"/>
+  <circle cx="30" cy="30" r="0.8" fill="#404048"/>
+  <!-- Faucet base -->
+  <ellipse cx="30" cy="8" rx="5" ry="3" fill="#c0c0c8" stroke="#a0a0a8" stroke-width="0.4"/>
+  <!-- Faucet neck -->
+  <rect x="28" y="5" width="4" height="8" rx="1.5" fill="#c8c8d0" stroke="#a0a0a8" stroke-width="0.3"/>
+  <!-- Faucet spout (arc toward basin) -->
+  <path d="M30,8 Q30,16 30,18" fill="none" stroke="#b0b0b8" stroke-width="2" stroke-linecap="round"/>
+  <!-- Handles -->
+  <circle cx="23" cy="8" r="2" fill="#d8d8e0" stroke="#a0a0a8" stroke-width="0.3"/>
+  <circle cx="37" cy="8" r="2" fill="#d8d8e0" stroke="#a0a0a8" stroke-width="0.3"/>
+  <!-- Handle markers -->
+  <text x="22" y="9.5" font-size="2.5" fill="#888890" font-family="sans-serif">C</text>
+  <text x="36" y="9.5" font-size="2.5" fill="#c04040" font-family="sans-serif">H</text>
+</svg>

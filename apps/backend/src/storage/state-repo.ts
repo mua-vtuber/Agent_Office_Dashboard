@@ -91,6 +91,29 @@ export function listStatesScoped(filter: {
   return db.prepare(sql).all(...args) as StateRow[];
 }
 
+/**
+ * Return only states whose (workspace_id, terminal_session_id, run_id)
+ * matches one of the given active session keys ("ws::ts::run").
+ */
+export function listStatesForActiveSessions(activeKeys: Set<string>): StateRow[] {
+  if (activeKeys.size === 0) return [];
+  const all = listStates();
+  return all.filter((s) => activeKeys.has(`${s.workspace_id}::${s.terminal_session_id}::${s.run_id}`));
+}
+
+/**
+ * Return states that either match active session keys OR have recent activity
+ * (last_event_ts within cutoffTs). This prevents agents from disappearing
+ * when their session is briefly marked stale during long thinking periods.
+ */
+export function listStatesForActiveOrRecent(activeKeys: Set<string>, cutoffTs: string): StateRow[] {
+  const all = listStates();
+  return all.filter((s) =>
+    activeKeys.has(`${s.workspace_id}::${s.terminal_session_id}::${s.run_id}`)
+    || s.last_event_ts >= cutoffTs
+  );
+}
+
 export function getState(agentId: string): StateRow | null {
   const row = db
     .prepare("SELECT * FROM state_current WHERE agent_id = ?")

@@ -62,17 +62,18 @@ export const useWsStore = create<WsStore>((set, get) => {
 
         if (msg.type === "snapshot" && msg.data) {
           const d = msg.data as {
-            agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string }>;
+            agents?: Array<{ agent_id: string; status: string; thinking_text?: string | null; last_event_ts: string; terminal_session_id?: string }>;
             recent_events?: unknown[];
             tasks?: TaskView[];
           };
-          if (Array.isArray(d.agents)) {
+          if (Array.isArray(d.agents) && d.agents.length > 0) {
             useAgentStore.getState().setMany(
               d.agents.map((a) => ({
                 agent_id: a.agent_id,
                 status: a.status,
                 thinking: a.thinking_text ?? null,
-                last_event_ts: a.last_event_ts ?? new Date().toISOString()
+                last_event_ts: a.last_event_ts ?? new Date().toISOString(),
+                terminal_session_id: a.terminal_session_id ?? "",
               }))
             );
           }
@@ -89,12 +90,13 @@ export const useWsStore = create<WsStore>((set, get) => {
         }
 
         if (msg.type === "state_update" && msg.data) {
-          const d = msg.data as { agent_id: string; next_status: string; thinking?: string | null; ts: string };
+          const d = msg.data as { agent_id: string; next_status: string; thinking?: string | null; ts: string; terminal_session_id?: string };
           useAgentStore.getState().upsert({
             agent_id: d.agent_id,
             status: d.next_status,
             thinking: d.thinking ?? null,
             last_event_ts: d.ts,
+            terminal_session_id: d.terminal_session_id ?? "",
           });
         }
         if (msg.type === "task_update") {

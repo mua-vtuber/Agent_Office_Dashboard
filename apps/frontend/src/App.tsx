@@ -112,33 +112,35 @@ export default function App(): JSX.Element {
     <div className="app-shell">
       <ErrorModal />
       <header className="topbar">
-        <div className="topbar-main">
-          <h1>{t("app_title")}</h1>
-          <div className="scope-bar header-scope">
-            <label>
-              {t("common_terminal")}
-              <select value={selectedTerminal} onChange={(e) => updateScope(e.target.value)}>
-                <option value="">{t("common_all")}</option>
-                {terminalOptions.map((s) => (
-                  <option key={s.terminal_session_id} value={s.terminal_session_id}>
-                    {s.terminal_label} ({s.workspace_id})
-                  </option>
-                ))}
-              </select>
-            </label>
+        <div className="topbar-inner">
+          <div className="topbar-main">
+            <h1>{t("app_title")}</h1>
+            <div className="scope-bar header-scope">
+              <label>
+                {t("common_terminal")}
+                <select value={selectedTerminal} onChange={(e) => updateScope(e.target.value)}>
+                  <option value="">{t("common_all")}</option>
+                  {terminalOptions.map((s) => (
+                    <option key={s.terminal_session_id} value={s.terminal_session_id}>
+                      {s.terminal_label} ({s.workspace_id})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
           </div>
+          <nav className="tabs">
+            {tabs.map((tab) => (
+              <NavLink
+                key={tab.to}
+                to={{ pathname: tab.to, search: location.search }}
+                className={({ isActive }) => (isActive ? "tab active" : "tab")}
+              >
+                {tab.label}
+              </NavLink>
+            ))}
+          </nav>
         </div>
-        <nav className="tabs">
-          {tabs.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={{ pathname: tab.to, search: location.search }}
-              className={({ isActive }) => (isActive ? "tab active" : "tab")}
-            >
-              {tab.label}
-            </NavLink>
-          ))}
-        </nav>
       </header>
       <main className="page">
         <ErrorBoundary>

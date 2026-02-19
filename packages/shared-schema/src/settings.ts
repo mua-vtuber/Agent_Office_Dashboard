@@ -169,8 +169,8 @@ export const defaultSettings: Settings = {
   },
   office_layout: {
     layout_profile: "kr_t_left_v2",
-    canvas_width: 800,
-    canvas_height: 560,
+    canvas_width: 1080,
+    canvas_height: 650,
     seat_positions: {
       /* 팀장: T자 상단 가로 책상 아래 */
       manager: { x: 19, y: 18 },
@@ -227,7 +227,7 @@ export const defaultSettings: Settings = {
     post_complete_weights: { roaming: 0.4, breakroom: 0.4, resting: 0.2 },
     pending_input_alert_seconds: 60,
     failed_alert_seconds: 30,
-    stale_agent_seconds: 30,
+    stale_agent_seconds: 300,
     failure_alert_enabled: true,
     snapshot_sync_interval_sec: 30,
     move_speed_px_per_sec: 120,

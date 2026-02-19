@@ -1,5 +1,5 @@
 import { listActiveSessions, markStaleSessions } from "../storage/sessions-repo";
-import { listStates } from "../storage/state-repo";
+import { listStatesForActiveSessions } from "../storage/state-repo";
 import { checkTimerTransitions, getAppSettings } from "../services/state-machine";
 import { upsertState } from "../storage/state-repo";
 import { broadcast } from "../ws/gateway";
@@ -32,8 +32,12 @@ function tick(): void {
   const cutoffTs = new Date(Date.now() - staleThresholdMs).toISOString();
   markStaleSessions(cutoffTs);
 
-  // 2. Check timer-based state transitions for all agents
-  const states = listStates();
+  // 2. Check timer-based state transitions for active-session agents only
+  const sessions = listActiveSessions();
+  const activeKeys = new Set(
+    sessions.map((s) => `${s.workspace_id}::${s.terminal_session_id}::${s.run_id}`)
+  );
+  const states = listStatesForActiveSessions(activeKeys);
   for (const state of states) {
     const current = state.status as AgentStatus;
     const timerNext = checkTimerTransitions(current, state.since, settings);
@@ -59,13 +63,14 @@ function tick(): void {
           context: state.context_json ? JSON.parse(state.context_json) : {},
           triggered_by_event_id: null,
           ts,
+          terminal_session_id: state.terminal_session_id,
+          thinking: state.thinking_text ?? null,
         },
       });
     }
   }
 
   // 3. Broadcast heartbeat to active sessions
-  const sessions = listActiveSessions();
   for (const session of sessions) {
     broadcast(
       {

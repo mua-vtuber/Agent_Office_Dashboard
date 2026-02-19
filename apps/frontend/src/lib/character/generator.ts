@@ -1,5 +1,5 @@
 import type { CharacterTraits } from "./types";
-import { generateColorHex } from "./palette";
+import { generateColorHex, generatePastelSkinHex } from "./palette";
 
 /** Hash agent_id string to unsigned 32-bit integer seed */
 export function hashSeed(agentId: string): number {
@@ -35,7 +35,7 @@ export function generateTraits(
   // accessoryIndex: -1 means no accessory
   const accessoryIndex = Math.floor(rand() * (partCounts.accessory + 1)) - 1;
 
-  const skinColor = generateColorHex(rand);
+  const skinColor = generatePastelSkinHex(rand);
   const hairColor = generateColorHex(rand);
 
   const costumeColors: number[] = [];

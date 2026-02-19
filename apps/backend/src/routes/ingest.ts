@@ -162,6 +162,7 @@ export async function registerIngestRoutes(app: FastifyInstance): Promise<void> 
           thinking: thinkingText,
           triggered_by_event_id: event.id,
           ts: event.ts,
+          terminal_session_id: event.terminal_session_id,
         },
       });
 

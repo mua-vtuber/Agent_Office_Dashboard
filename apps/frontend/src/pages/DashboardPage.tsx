@@ -15,6 +15,7 @@ type SnapshotAgent = {
   status: string;
   thinking_text?: string | null;
   last_event_ts: string;
+  terminal_session_id?: string;
 };
 
 type EventRow = {
@@ -141,7 +142,8 @@ export function DashboardPage(): JSX.Element {
               agent_id: a.agent_id,
               status: a.status,
               thinking: a.thinking_text ?? null,
-              last_event_ts: a.last_event_ts ?? new Date().toISOString()
+              last_event_ts: a.last_event_ts ?? new Date().toISOString(),
+              terminal_session_id: a.terminal_session_id ?? "",
             }))
           );
         }
@@ -173,7 +175,8 @@ export function DashboardPage(): JSX.Element {
               agent_id: a.agent_id,
               status: a.status,
               thinking: a.thinking_text ?? null,
-              last_event_ts: a.last_event_ts ?? new Date().toISOString()
+              last_event_ts: a.last_event_ts ?? new Date().toISOString(),
+              terminal_session_id: a.terminal_session_id ?? "",
             }))
           );
         }

@@ -1,8 +1,10 @@
 import { WebSocketServer } from "ws";
 import { listEvents } from "../storage/events-repo";
-import { listStates } from "../storage/state-repo";
+import { listStatesForActiveOrRecent } from "../storage/state-repo";
 import { listActiveTasks } from "../storage/tasks-repo";
+import { listActiveSessions } from "../storage/sessions-repo";
 import { getMergedSettings } from "../services/settings-service";
+import { getAppSettings } from "../services/state-machine";
 
 type WsClient = {
   readyState: number;
@@ -25,10 +27,18 @@ function sendJson(client: WsClient, message: unknown): void {
 }
 
 function snapshotPayload(): Record<string, unknown> {
+  const activeSessions = listActiveSessions();
+  const activeKeys = new Set(
+    activeSessions.map((s) => `${s.workspace_id}::${s.terminal_session_id}::${s.run_id}`)
+  );
+  // Include agents from active sessions + agents with recent events (stale_agent_seconds grace period)
+  const settings = getAppSettings();
+  const graceMs = settings.operations.stale_agent_seconds * 1000;
+  const cutoffTs = new Date(Date.now() - graceMs).toISOString();
   return {
-    agents: listStates(),
+    agents: listStatesForActiveOrRecent(activeKeys, cutoffTs),
     tasks: listActiveTasks(),
-    sessions: [],
+    sessions: activeSessions,
     settings: getMergedSettings(),
     recent_events: listEvents(100),
     server_ts: new Date().toISOString(),

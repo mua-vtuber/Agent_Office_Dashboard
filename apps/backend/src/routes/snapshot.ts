@@ -8,8 +8,9 @@ import {
 } from "../storage/events-repo";
 import { listStatesScoped } from "../storage/state-repo";
 import { listTasksScoped } from "../storage/tasks-repo";
-import { listActiveSessions } from "../storage/sessions-repo";
+import { listActiveSessions, listAllSessions } from "../storage/sessions-repo";
 import { getMergedSettings } from "../services/settings-service";
+import { getAppSettings } from "../services/state-machine";
 
 function scopeFilter(query: { workspace_id?: string; terminal_session_id?: string; run_id?: string }): {
   workspace_id?: string;
@@ -40,6 +41,17 @@ function filterByActiveSessions<T extends { workspace_id: string; terminal_sessi
   );
 }
 
+function filterByActiveOrRecent<T extends { workspace_id: string; terminal_session_id: string; run_id: string; last_event_ts?: string }>(
+  rows: T[],
+  activeKeys: Set<string>,
+  cutoffTs: string
+): T[] {
+  return rows.filter((row) =>
+    activeKeys.has(makeSessionKey(row.workspace_id, row.terminal_session_id, row.run_id))
+    || (row.last_event_ts != null && row.last_event_ts >= cutoffTs)
+  );
+}
+
 export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/snapshot", async (request) => {
     const query = request.query as { workspace_id?: string; terminal_session_id?: string; run_id?: string };
@@ -52,9 +64,12 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
     const states = listStatesScoped(filter);
     const tasks = listTasksScoped(filter);
     const events = listEventsScoped(100, filter);
+    const settings = getAppSettings();
+    const graceMs = settings.operations.stale_agent_seconds * 1000;
+    const cutoffTs = new Date(Date.now() - graceMs).toISOString();
 
     return {
-      agents: explicit ? states : filterByActiveSessions(states, activeKeys),
+      agents: explicit ? states : filterByActiveOrRecent(states, activeKeys, cutoffTs),
       tasks: explicit ? tasks : filterByActiveSessions(tasks, activeKeys),
       sessions: activeSessions,
       settings: getMergedSettings(),
@@ -80,14 +95,22 @@ export async function registerSnapshotRoutes(app: FastifyInstance): Promise<void
 
   app.get("/api/sessions", async () => {
     const activeSessions = listActiveSessions();
-    const scopes = activeSessions.map((s) => ({
+    // Also include recently active sessions (within stale grace period)
+    const settings = getAppSettings();
+    const graceMs = settings.operations.stale_agent_seconds * 1000;
+    const cutoffTs = new Date(Date.now() - graceMs).toISOString();
+    const allSessions = listAllSessions();
+    const relevantSessions = allSessions.filter(
+      (s) => s.status === "active" || s.last_heartbeat_ts >= cutoffTs
+    );
+    const scopes = relevantSessions.map((s) => ({
       workspace_id: s.workspace_id,
       terminal_session_id: s.terminal_session_id,
       run_id: s.run_id,
       last_event_ts: s.last_heartbeat_ts
     }));
     const terminalMap = new Map<string, { terminal_session_id: string; terminal_label: string; workspace_id: string; last_event_ts: string }>();
-    for (const s of activeSessions) {
+    for (const s of relevantSessions) {
       const prev = terminalMap.get(s.terminal_session_id);
       if (!prev || s.last_heartbeat_ts > prev.last_event_ts) {
         terminalMap.set(s.terminal_session_id, {

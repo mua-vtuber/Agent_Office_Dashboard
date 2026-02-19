@@ -1,5 +1,4 @@
 import { Container, Sprite } from "pixi.js";
-import { CHAR_W, ORIGIN_X, ORIGIN_Y } from "./types";
 import { generateTraits } from "./generator";
 import { buildColorMap, swapPalette } from "./palette";
 
@@ -43,10 +42,7 @@ async function addLayer(
   const colorMap = buildColorMap(colors);
   const texture = await swapPalette(paths[index]!, colorMap);
   const sprite = new Sprite(texture);
-  sprite.width = CHAR_W;
-  sprite.height = CHAR_W;
-  sprite.x = -ORIGIN_X;
-  sprite.y = -ORIGIN_Y;
+  sprite.anchor.set(0.5, 0.5);
   container.addChild(sprite);
 }
 
@@ -69,10 +65,12 @@ export function clearCharacterCache(): void {
  * Build a deterministic character Container for the given agent_id.
  * Returns cached container on repeat calls.
  * Parts directories that contain no SVGs are simply skipped.
+ *
+ * @param size — final pixel diameter of the character. The only size control point.
  */
 export async function buildCharacter(
   agentId: string,
-  scale?: number,
+  size?: number,
 ): Promise<Container> {
   const cached = cache.get(agentId);
   if (cached && !cached.destroyed) return cached;
@@ -100,8 +98,13 @@ export async function buildCharacter(
   // Layer 4: accessory (index -1 = none, addLayer handles it)
   await addLayer(container, accessoryPaths, traits.accessoryIndex, traits.accessoryColors);
 
-  if (scale != null) {
-    container.scale.set(scale);
+  // Resize all sprites to final pixel size directly
+  if (size != null) {
+    for (const child of container.children) {
+      const s = child as Sprite;
+      s.width = size;
+      s.height = size;
+    }
   }
 
   cache.set(agentId, container);
