@@ -41,6 +41,49 @@ impl AgentsRepo {
         Ok(())
     }
 
+    /// 단일 에이전트를 ID로 조회한다.
+    /// 주의: status, thinking_text, current_task는 agents 테이블에 없으므로
+    /// 기본값이 설정된다. 호출자는 StateRepo에서 AgentState를 조회하여
+    /// 이 필드들을 덮어써야 한다.
+    pub fn get_by_id(&self, agent_id: &str) -> Result<Option<MascotAgent>, AppError> {
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
+        let mut stmt = conn.prepare(
+            "SELECT agent_id, display_name, role, employment_type, workspace_id, appearance_json, last_active_ts
+             FROM agents WHERE agent_id = ?1",
+        )?;
+
+        let result = stmt.query_row(rusqlite::params![agent_id], |row| {
+            let role_str: String = row.get(2)?;
+            let emp_str: String = row.get(3)?;
+            let appearance_str: String = row.get(5)?;
+
+            Ok(MascotAgent {
+                agent_id: row.get(0)?,
+                display_name: row.get(1)?,
+                role: serde_json::from_str(&role_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+                })?,
+                employment_type: serde_json::from_str(&emp_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
+                })?,
+                workspace_id: row.get(4)?,
+                status: AgentStatus::Offline,
+                thinking_text: None,
+                current_task: None,
+                appearance: serde_json::from_str(&appearance_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))
+                })?,
+                last_active_ts: row.get(6)?,
+            })
+        });
+
+        match result {
+            Ok(agent) => Ok(Some(agent)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// 모든 에이전트를 조회한다.
     /// 주의: status, thinking_text, current_task는 agents 테이블에 없으므로
     /// 기본값이 설정된다. 호출자는 StateRepo에서 AgentState를 조회하여
@@ -123,5 +166,18 @@ mod tests {
 
         let agents = repo.get_all().expect("get_all");
         assert_eq!(agents.len(), 2);
+    }
+
+    #[test]
+    fn test_get_by_id() {
+        let db = init_db_in_memory().expect("db init");
+        let repo = AgentsRepo::new(db);
+        repo.upsert(&make_test_agent("agent-01")).expect("upsert");
+
+        let found = repo.get_by_id("agent-01").expect("get").expect("should exist");
+        assert_eq!(found.agent_id, "agent-01");
+
+        let not_found = repo.get_by_id("nonexistent").expect("get");
+        assert!(not_found.is_none());
     }
 }

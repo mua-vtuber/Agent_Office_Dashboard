@@ -19,6 +19,8 @@ pub enum EventType {
     ToolStarted,
     ToolSucceeded,
     ToolFailed,
+    // 확장 사고
+    ThinkingUpdated,
     // 시스템
     Heartbeat,
     Notification,
@@ -51,6 +53,14 @@ pub enum Severity {
     Info,
     Warn,
     Error,
+}
+
+/// 이력서용 이벤트 요약 (ipc-protocol.md §3.1)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResumeEvent {
+    pub event_type: String,
+    pub summary: String,
+    pub ts: String,
 }
 
 /// 정규화된 이벤트 (hooks-integration.md §7.1)

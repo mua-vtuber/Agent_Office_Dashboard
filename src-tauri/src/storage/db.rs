@@ -43,6 +43,7 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
         CREATE TABLE IF NOT EXISTS agent_state (
             agent_id TEXT PRIMARY KEY,
             status TEXT NOT NULL DEFAULT 'offline',
+            prev_status TEXT,
             thinking_text TEXT,
             current_task TEXT,
             workspace_id TEXT NOT NULL,
@@ -62,7 +63,11 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
             source TEXT NOT NULL,
             workspace_id TEXT NOT NULL,
             terminal_session_id TEXT NOT NULL,
+            run_id TEXT,
+            session_id TEXT,
             agent_id TEXT NOT NULL,
+            target_agent_id TEXT,
+            task_id TEXT,
             severity TEXT NOT NULL DEFAULT 'info',
             payload_json TEXT,
             thinking_text TEXT,
@@ -72,6 +77,7 @@ fn run_migrations(conn: &Connection) -> Result<(), AppError> {
 
         CREATE INDEX IF NOT EXISTS idx_events_agent_id ON events(agent_id);
         CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+        CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
         CREATE INDEX IF NOT EXISTS idx_agent_state_workspace ON agent_state(workspace_id);
 
         CREATE TABLE IF NOT EXISTS settings (

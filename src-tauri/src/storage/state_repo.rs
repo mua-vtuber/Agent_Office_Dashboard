@@ -1,6 +1,31 @@
 use crate::error::AppError;
-use crate::models::agent::{AgentState, AgentStatus};
+use crate::models::agent::AgentState;
 use crate::storage::db::DbPool;
+
+fn row_to_agent_state(row: &rusqlite::Row<'_>) -> Result<AgentState, rusqlite::Error> {
+    let status_str: String = row.get(1)?;
+    let prev_status_str: Option<String> = row.get(2)?;
+    Ok(AgentState {
+        agent_id: row.get(0)?,
+        status: serde_json::from_str(&status_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        prev_status: prev_status_str
+            .map(|s| serde_json::from_str(&s))
+            .transpose()
+            .map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+            })?,
+        thinking_text: row.get(3)?,
+        current_task: row.get(4)?,
+        workspace_id: row.get(5)?,
+        since: row.get(6)?,
+        last_event_ts: row.get(7)?,
+        session_id: row.get(8)?,
+        peer_agent_id: row.get(9)?,
+        home_x: row.get(10)?,
+    })
+}
 
 pub struct StateRepo {
     db: DbPool,
@@ -15,12 +40,17 @@ impl StateRepo {
         let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let status_str = serde_json::to_string(&state.status)
             .map_err(|e| AppError::Normalize(e.to_string()))?;
+        let prev_status_str = state.prev_status.as_ref()
+            .map(|s| serde_json::to_string(s))
+            .transpose()
+            .map_err(|e| AppError::Normalize(e.to_string()))?;
 
         conn.execute(
-            "INSERT INTO agent_state (agent_id, status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            "INSERT INTO agent_state (agent_id, status, prev_status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(agent_id) DO UPDATE SET
                status = excluded.status,
+               prev_status = excluded.prev_status,
                thinking_text = excluded.thinking_text,
                current_task = excluded.current_task,
                since = excluded.since,
@@ -30,6 +60,7 @@ impl StateRepo {
             rusqlite::params![
                 state.agent_id,
                 status_str,
+                prev_status_str,
                 state.thinking_text,
                 state.current_task,
                 state.workspace_id,
@@ -46,29 +77,11 @@ impl StateRepo {
     pub fn get(&self, agent_id: &str) -> Result<Option<AgentState>, AppError> {
         let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let mut stmt = conn.prepare(
-            "SELECT agent_id, status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x
+            "SELECT agent_id, status, prev_status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x
              FROM agent_state WHERE agent_id = ?1",
         )?;
 
-        let result = stmt.query_row(rusqlite::params![agent_id], |row| {
-            let status_str: String = row.get(1)?;
-            Ok(AgentState {
-                agent_id: row.get(0)?,
-                status: serde_json::from_str(&status_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        1, rusqlite::types::Type::Text, Box::new(e),
-                    )
-                })?,
-                thinking_text: row.get(2)?,
-                current_task: row.get(3)?,
-                workspace_id: row.get(4)?,
-                since: row.get(5)?,
-                last_event_ts: row.get(6)?,
-                session_id: row.get(7)?,
-                peer_agent_id: row.get(8)?,
-                home_x: row.get(9)?,
-            })
-        });
+        let result = stmt.query_row(rusqlite::params![agent_id], row_to_agent_state);
 
         match result {
             Ok(state) => Ok(Some(state)),
@@ -80,30 +93,12 @@ impl StateRepo {
     pub fn get_all(&self) -> Result<Vec<AgentState>, AppError> {
         let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let mut stmt = conn.prepare(
-            "SELECT agent_id, status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x
+            "SELECT agent_id, status, prev_status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x
              FROM agent_state",
         )?;
 
         let states = stmt
-            .query_map([], |row| {
-                let status_str: String = row.get(1)?;
-                Ok(AgentState {
-                    agent_id: row.get(0)?,
-                    status: serde_json::from_str(&status_str).map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            1, rusqlite::types::Type::Text, Box::new(e),
-                        )
-                    })?,
-                    thinking_text: row.get(2)?,
-                    current_task: row.get(3)?,
-                    workspace_id: row.get(4)?,
-                    since: row.get(5)?,
-                    last_event_ts: row.get(6)?,
-                    session_id: row.get(7)?,
-                    peer_agent_id: row.get(8)?,
-                    home_x: row.get(9)?,
-                })
-            })?
+            .query_map([], row_to_agent_state)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(states)
@@ -113,12 +108,14 @@ impl StateRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::agent::AgentStatus;
     use crate::storage::db::init_db_in_memory;
 
     fn make_test_state(id: &str) -> AgentState {
         AgentState {
             agent_id: id.to_string(),
             status: AgentStatus::Idle,
+            prev_status: None,
             thinking_text: None,
             current_task: None,
             workspace_id: "test-project".to_string(),

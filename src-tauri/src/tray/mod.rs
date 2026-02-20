@@ -3,28 +3,33 @@ use tauri::{
     tray::TrayIconBuilder,
     Emitter, Manager,
 };
+use crate::state::AppState;
+use crate::storage::settings_repo::SettingsRepo;
 
-/// 시스템 트레이 아이콘 + 메뉴를 구성한다.
-///
-/// 메뉴 구조 (product-spec.md §4.3):
-///   마스코트 표시
-///   에이전트 이력서
-///   ──────────────
-///   언어 ▸ 한국어 ✓ / English
-///   자동 실행
-///   ──────────────
-///   종료
 pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // 초기 설정값 로드
+    let initial_lang = {
+        let state: tauri::State<'_, AppState> = app.state();
+        let repo = SettingsRepo::new(state.db.clone());
+        repo.get("lang").unwrap_or(None).unwrap_or_else(|| "ko".to_string())
+    };
+
+    let initial_autostart = {
+        let state: tauri::State<'_, AppState> = app.state();
+        let repo = SettingsRepo::new(state.db.clone());
+        repo.get("autostart").unwrap_or(None).unwrap_or_else(|| "false".to_string()) == "true"
+    };
+
     // ── 일반 메뉴 항목 ──
     let show_item = MenuItemBuilder::with_id("show", "마스코트 표시").build(app)?;
     let resume_item = MenuItemBuilder::with_id("resume", "에이전트 이력서").build(app)?;
 
     // ── 언어 서브메뉴 ──
     let lang_ko = CheckMenuItemBuilder::with_id("lang_ko", "한국어")
-        .checked(true)
+        .checked(initial_lang == "ko")
         .build(app)?;
     let lang_en = CheckMenuItemBuilder::with_id("lang_en", "English")
-        .checked(false)
+        .checked(initial_lang == "en")
         .build(app)?;
     let lang_submenu = SubmenuBuilder::with_id(app, "lang", "언어")
         .items(&[&lang_ko, &lang_en])
@@ -32,7 +37,7 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 자동 실행 ──
     let autostart_item = CheckMenuItemBuilder::with_id("autostart", "자동 실행")
-        .checked(false)
+        .checked(initial_autostart)
         .build(app)?;
 
     // ── 종료 ──
@@ -48,6 +53,11 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .item(&quit_item)
         .build()?;
 
+    // 클로저에서 사용할 CheckMenuItem 클론
+    let lang_ko_clone = lang_ko.clone();
+    let lang_en_clone = lang_en.clone();
+    let autostart_clone = autostart_item.clone();
+
     // ── 트레이 아이콘 생성 ──
     let _tray = TrayIconBuilder::new()
         .menu(&menu)
@@ -62,17 +72,53 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 "resume" => {
-                    // WebView 에 모달 열기 이벤트 전송
                     let _ = app_handle.emit("mascot://open-resume-modal", ());
+                }
+                "lang_ko" => {
+                    let _ = lang_ko_clone.set_checked(true);
+                    let _ = lang_en_clone.set_checked(false);
+                    save_setting(app_handle, "lang", "ko");
+                    let _ = app_handle.emit("mascot://settings-changed", serde_json::json!({
+                        "key": "lang",
+                        "value": "ko"
+                    }));
+                }
+                "lang_en" => {
+                    let _ = lang_ko_clone.set_checked(false);
+                    let _ = lang_en_clone.set_checked(true);
+                    save_setting(app_handle, "lang", "en");
+                    let _ = app_handle.emit("mascot://settings-changed", serde_json::json!({
+                        "key": "lang",
+                        "value": "en"
+                    }));
+                }
+                "autostart" => {
+                    let is_checked = autostart_clone.is_checked().unwrap_or(false);
+                    // 토글: 현재 checked 상태의 반대로 설정
+                    let new_val = if is_checked { "false" } else { "true" };
+                    let _ = autostart_clone.set_checked(!is_checked);
+                    save_setting(app_handle, "autostart", new_val);
+                    let _ = app_handle.emit("mascot://settings-changed", serde_json::json!({
+                        "key": "autostart",
+                        "value": !is_checked
+                    }));
                 }
                 "quit" => {
                     app_handle.exit(0);
                 }
-                // lang_ko, lang_en, autostart 등은 별도 핸들러에서 처리 예정
                 _ => {}
             }
         })
         .build(app)?;
 
     Ok(())
+}
+
+/// settings DB에 값 저장
+fn save_setting(app_handle: &tauri::AppHandle, key: &str, value: &str) {
+    let state: tauri::State<'_, AppState> = app_handle.state();
+    let repo = SettingsRepo::new(state.db.clone());
+    if let Err(e) = repo.set(key, value) {
+        tracing::error!("failed to save setting {key}={value}: {e}");
+    }
 }
