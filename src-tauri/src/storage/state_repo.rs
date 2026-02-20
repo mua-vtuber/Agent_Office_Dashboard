@@ -12,9 +12,7 @@ impl StateRepo {
     }
 
     pub fn upsert(&self, state: &AgentState) -> Result<(), AppError> {
-        let conn = self.db.lock().map_err(|e| AppError::Database(
-            rusqlite::Error::InvalidParameterName(e.to_string()),
-        ))?;
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let status_str = serde_json::to_string(&state.status)
             .map_err(|e| AppError::Normalize(e.to_string()))?;
 
@@ -46,9 +44,7 @@ impl StateRepo {
     }
 
     pub fn get(&self, agent_id: &str) -> Result<Option<AgentState>, AppError> {
-        let conn = self.db.lock().map_err(|e| AppError::Database(
-            rusqlite::Error::InvalidParameterName(e.to_string()),
-        ))?;
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let mut stmt = conn.prepare(
             "SELECT agent_id, status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x
              FROM agent_state WHERE agent_id = ?1",
@@ -58,7 +54,11 @@ impl StateRepo {
             let status_str: String = row.get(1)?;
             Ok(AgentState {
                 agent_id: row.get(0)?,
-                status: serde_json::from_str(&status_str).unwrap_or(AgentStatus::Offline),
+                status: serde_json::from_str(&status_str).map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        1, rusqlite::types::Type::Text, Box::new(e),
+                    )
+                })?,
                 thinking_text: row.get(2)?,
                 current_task: row.get(3)?,
                 workspace_id: row.get(4)?,
@@ -78,9 +78,7 @@ impl StateRepo {
     }
 
     pub fn get_all(&self) -> Result<Vec<AgentState>, AppError> {
-        let conn = self.db.lock().map_err(|e| AppError::Database(
-            rusqlite::Error::InvalidParameterName(e.to_string()),
-        ))?;
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let mut stmt = conn.prepare(
             "SELECT agent_id, status, thinking_text, current_task, workspace_id, since, last_event_ts, session_id, peer_agent_id, home_x
              FROM agent_state",
@@ -91,7 +89,11 @@ impl StateRepo {
                 let status_str: String = row.get(1)?;
                 Ok(AgentState {
                     agent_id: row.get(0)?,
-                    status: serde_json::from_str(&status_str).unwrap_or(AgentStatus::Offline),
+                    status: serde_json::from_str(&status_str).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            1, rusqlite::types::Type::Text, Box::new(e),
+                        )
+                    })?,
                     thinking_text: row.get(2)?,
                     current_task: row.get(3)?,
                     workspace_id: row.get(4)?,

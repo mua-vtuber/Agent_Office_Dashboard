@@ -28,6 +28,9 @@ pub enum AppError {
     #[error("normalization failed: {0}")]
     Normalize(String),
 
+    #[error("internal lock poisoned: {0}")]
+    LockPoisoned(String),
+
     #[error("state transition error: {0}")]
     StateTransition(String),
 

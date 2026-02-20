@@ -11,10 +11,12 @@ impl AgentsRepo {
         Self { db }
     }
 
+    /// 에이전트를 저장하거나 갱신한다.
+    /// 주의: first_seen_ts는 최초 INSERT 시에만 기록되며, ON CONFLICT에서는
+    /// 갱신하지 않는다. 최초 insert 시 last_active_ts를 first_seen_ts로 사용하는
+    /// 이유는 에이전트를 처음 인지한 시점 = 해당 이벤트의 타임스탬프이기 때문이다.
     pub fn upsert(&self, agent: &MascotAgent) -> Result<(), AppError> {
-        let conn = self.db.lock().map_err(|e| AppError::Database(
-            rusqlite::Error::InvalidParameterName(e.to_string()),
-        ))?;
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let appearance_json = serde_json::to_string(&agent.appearance)
             .map_err(|e| AppError::Normalize(e.to_string()))?;
 
@@ -39,10 +41,12 @@ impl AgentsRepo {
         Ok(())
     }
 
+    /// 모든 에이전트를 조회한다.
+    /// 주의: status, thinking_text, current_task는 agents 테이블에 없으므로
+    /// 기본값이 설정된다. 호출자는 StateRepo에서 AgentState를 조회하여
+    /// 이 필드들을 덮어써야 한다.
     pub fn get_all(&self) -> Result<Vec<MascotAgent>, AppError> {
-        let conn = self.db.lock().map_err(|e| AppError::Database(
-            rusqlite::Error::InvalidParameterName(e.to_string()),
-        ))?;
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let mut stmt = conn.prepare(
             "SELECT agent_id, display_name, role, employment_type, workspace_id, appearance_json, last_active_ts
              FROM agents",
@@ -57,19 +61,25 @@ impl AgentsRepo {
                 Ok(MascotAgent {
                     agent_id: row.get(0)?,
                     display_name: row.get(1)?,
-                    role: serde_json::from_str(&role_str).unwrap_or(AgentRole::Unknown),
-                    employment_type: serde_json::from_str(&emp_str)
-                        .unwrap_or(EmploymentType::Contractor),
+                    role: serde_json::from_str(&role_str).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            2, rusqlite::types::Type::Text, Box::new(e),
+                        )
+                    })?,
+                    employment_type: serde_json::from_str(&emp_str).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            3, rusqlite::types::Type::Text, Box::new(e),
+                        )
+                    })?,
                     workspace_id: row.get(4)?,
                     status: AgentStatus::Offline,
                     thinking_text: None,
                     current_task: None,
-                    appearance: serde_json::from_str(&appearance_str)
-                        .unwrap_or_else(|_| AppearanceProfile {
-                            body_index: 0, hair_index: 0, outfit_index: 0,
-                            accessory_index: 0, face_index: 0,
-                            hair_hue: 0.0, outfit_hue: 0.0, skin_hue: 0.0, skin_lightness: 80.0,
-                        }),
+                    appearance: serde_json::from_str(&appearance_str).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            5, rusqlite::types::Type::Text, Box::new(e),
+                        )
+                    })?,
                     last_active_ts: row.get(6)?,
                 })
             })?
