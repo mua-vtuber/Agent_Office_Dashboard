@@ -1,6 +1,7 @@
 mod config;
 mod error;
 mod models;
+mod storage;
 
 pub use config::AppConfig;
 pub use error::{AppError, ConfigError};

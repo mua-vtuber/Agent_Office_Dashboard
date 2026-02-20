@@ -19,9 +19,8 @@ pub enum AppError {
     #[error("config load failed: {0}")]
     Config(#[from] ConfigError),
 
-    // TODO(task-7): replace String with #[from] rusqlite::Error
     #[error("database error: {0}")]
-    Database(String),
+    Database(#[from] rusqlite::Error),
 
     #[error("http server error: {0}")]
     HttpServer(String),
