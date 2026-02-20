@@ -18,7 +18,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self' tauri://localhost; connect-src 'self' tauri://localhost; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src blob:"
     }
   },
   "bundle": {
