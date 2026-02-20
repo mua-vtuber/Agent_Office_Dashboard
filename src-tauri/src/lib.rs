@@ -1,5 +1,10 @@
+mod error;
+
 pub fn run() {
-    tauri::Builder::default()
+    if let Err(e) = tauri::Builder::default()
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    {
+        eprintln!("Fatal: failed to start application: {e}");
+        std::process::exit(1);
+    }
 }
