@@ -12,9 +12,15 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Agent Mascot",
-        "width": 800,
-        "height": 600
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "fullscreen": true,
+        "focus": false
       }
     ],
     "security": {
