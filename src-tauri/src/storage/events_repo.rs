@@ -1,6 +1,21 @@
 use crate::error::AppError;
-use crate::models::event::NormalizedEvent;
+use crate::models::event::{NormalizedEvent, ResumeEvent};
 use crate::storage::db::DbPool;
+
+fn extract_summary_from_type(event_type: &str, payload_str: &str) -> String {
+    let payload: serde_json::Value = serde_json::from_str(payload_str).unwrap_or_default();
+    let tool_name = payload.get("tool_name").and_then(|v| v.as_str()).unwrap_or("");
+    match event_type {
+        "\"task_completed\"" => "작업 완료".to_string(),
+        "\"task_started\"" => "작업 시작".to_string(),
+        "\"tool_started\"" => format!("도구 실행: {tool_name}"),
+        "\"tool_succeeded\"" => format!("도구 성공: {tool_name}"),
+        "\"tool_failed\"" => format!("도구 실패: {tool_name}"),
+        "\"agent_started\"" => "에이전트 시작".to_string(),
+        "\"agent_stopped\"" => "에이전트 종료".to_string(),
+        _ => event_type.trim_matches('"').to_string(),
+    }
+}
 
 pub struct EventsRepo {
     db: DbPool,
@@ -25,8 +40,10 @@ impl EventsRepo {
         let raw_json = event.raw.to_string();
 
         let rows = conn.execute(
-            "INSERT OR IGNORE INTO events (id, version, ts, event_type, source, workspace_id, terminal_session_id, agent_id, severity, payload_json, thinking_text, raw_json, fingerprint)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT OR IGNORE INTO events (id, version, ts, event_type, source, workspace_id,
+             terminal_session_id, run_id, session_id, agent_id, target_agent_id, task_id,
+             severity, payload_json, thinking_text, raw_json, fingerprint)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             rusqlite::params![
                 event.id,
                 event.version,
@@ -35,7 +52,11 @@ impl EventsRepo {
                 source_str,
                 event.workspace_id,
                 event.terminal_session_id,
+                event.run_id,
+                event.session_id,
                 event.agent_id,
+                event.target_agent_id,
+                event.task_id,
                 severity_str,
                 payload_json,
                 event.thinking_text,
@@ -45,6 +66,53 @@ impl EventsRepo {
         )?;
 
         Ok(rows > 0)
+    }
+
+    /// 에이전트의 최근 이벤트 조회 (이력서용)
+    pub fn get_recent_by_agent(&self, agent_id: &str, limit: usize) -> Result<Vec<ResumeEvent>, AppError> {
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
+        let mut stmt = conn.prepare(
+            "SELECT event_type, payload_json, ts FROM events WHERE agent_id = ?1 ORDER BY ts DESC LIMIT ?2",
+        )?;
+
+        let events = stmt
+            .query_map(rusqlite::params![agent_id, limit as i64], |row| {
+                let event_type_str: String = row.get(0)?;
+                let payload_str: String = row.get::<_, Option<String>>(1)?.unwrap_or_default();
+                let ts: String = row.get(2)?;
+                let summary = extract_summary_from_type(&event_type_str, &payload_str);
+
+                Ok(ResumeEvent {
+                    event_type: event_type_str,
+                    summary,
+                    ts,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(events)
+    }
+
+    /// 완료된 작업 수 카운트
+    pub fn count_completed_tasks(&self, agent_id: &str) -> Result<u64, AppError> {
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM events WHERE agent_id = ?1 AND event_type = '\"task_completed\"'",
+            rusqlite::params![agent_id],
+            |row| row.get(0),
+        )?;
+        Ok(count as u64)
+    }
+
+    /// 사용한 도구 수 카운트
+    pub fn count_tools_used(&self, agent_id: &str) -> Result<u64, AppError> {
+        let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM events WHERE agent_id = ?1 AND event_type = '\"tool_started\"'",
+            rusqlite::params![agent_id],
+            |row| row.get(0),
+        )?;
+        Ok(count as u64)
     }
 }
 

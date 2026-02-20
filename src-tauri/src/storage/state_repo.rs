@@ -2,6 +2,31 @@ use crate::error::AppError;
 use crate::models::agent::{AgentState, AgentStatus};
 use crate::storage::db::DbPool;
 
+fn row_to_agent_state(row: &rusqlite::Row<'_>) -> Result<AgentState, rusqlite::Error> {
+    let status_str: String = row.get(1)?;
+    let prev_status_str: Option<String> = row.get(2)?;
+    Ok(AgentState {
+        agent_id: row.get(0)?,
+        status: serde_json::from_str(&status_str).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))
+        })?,
+        prev_status: prev_status_str
+            .map(|s| serde_json::from_str(&s))
+            .transpose()
+            .map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))
+            })?,
+        thinking_text: row.get(3)?,
+        current_task: row.get(4)?,
+        workspace_id: row.get(5)?,
+        since: row.get(6)?,
+        last_event_ts: row.get(7)?,
+        session_id: row.get(8)?,
+        peer_agent_id: row.get(9)?,
+        home_x: row.get(10)?,
+    })
+}
+
 pub struct StateRepo {
     db: DbPool,
 }
@@ -56,34 +81,7 @@ impl StateRepo {
              FROM agent_state WHERE agent_id = ?1",
         )?;
 
-        let result = stmt.query_row(rusqlite::params![agent_id], |row| {
-            let status_str: String = row.get(1)?;
-            let prev_status_str: Option<String> = row.get(2)?;
-            Ok(AgentState {
-                agent_id: row.get(0)?,
-                status: serde_json::from_str(&status_str).map_err(|e| {
-                    rusqlite::Error::FromSqlConversionFailure(
-                        1, rusqlite::types::Type::Text, Box::new(e),
-                    )
-                })?,
-                prev_status: prev_status_str
-                    .map(|s| serde_json::from_str(&s))
-                    .transpose()
-                    .map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            2, rusqlite::types::Type::Text, Box::new(e),
-                        )
-                    })?,
-                thinking_text: row.get(3)?,
-                current_task: row.get(4)?,
-                workspace_id: row.get(5)?,
-                since: row.get(6)?,
-                last_event_ts: row.get(7)?,
-                session_id: row.get(8)?,
-                peer_agent_id: row.get(9)?,
-                home_x: row.get(10)?,
-            })
-        });
+        let result = stmt.query_row(rusqlite::params![agent_id], row_to_agent_state);
 
         match result {
             Ok(state) => Ok(Some(state)),
@@ -100,34 +98,7 @@ impl StateRepo {
         )?;
 
         let states = stmt
-            .query_map([], |row| {
-                let status_str: String = row.get(1)?;
-                let prev_status_str: Option<String> = row.get(2)?;
-                Ok(AgentState {
-                    agent_id: row.get(0)?,
-                    status: serde_json::from_str(&status_str).map_err(|e| {
-                        rusqlite::Error::FromSqlConversionFailure(
-                            1, rusqlite::types::Type::Text, Box::new(e),
-                        )
-                    })?,
-                    prev_status: prev_status_str
-                        .map(|s| serde_json::from_str(&s))
-                        .transpose()
-                        .map_err(|e| {
-                            rusqlite::Error::FromSqlConversionFailure(
-                                2, rusqlite::types::Type::Text, Box::new(e),
-                            )
-                        })?,
-                    thinking_text: row.get(3)?,
-                    current_task: row.get(4)?,
-                    workspace_id: row.get(5)?,
-                    since: row.get(6)?,
-                    last_event_ts: row.get(7)?,
-                    session_id: row.get(8)?,
-                    peer_agent_id: row.get(9)?,
-                    home_x: row.get(10)?,
-                })
-            })?
+            .query_map([], row_to_agent_state)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(states)

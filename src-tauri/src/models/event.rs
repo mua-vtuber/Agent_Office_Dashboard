@@ -55,6 +55,14 @@ pub enum Severity {
     Error,
 }
 
+/// 이력서용 이벤트 요약 (ipc-protocol.md §3.1)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResumeEvent {
+    pub event_type: String,
+    pub summary: String,
+    pub ts: String,
+}
+
 /// 정규화된 이벤트 (hooks-integration.md §7.1)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NormalizedEvent {
