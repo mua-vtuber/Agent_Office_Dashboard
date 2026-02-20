@@ -19,7 +19,10 @@ pub fn run() {
                 .path()
                 .resource_dir()
                 .map(|d| d.join("config.toml"))
-                .unwrap_or_else(|_| std::path::PathBuf::from("config.toml"));
+                .unwrap_or_else(|e| {
+                    tracing::warn!("resource_dir() failed ({e}), falling back to ./config.toml");
+                    std::path::PathBuf::from("config.toml")
+                });
 
             let config = AppConfig::load(&config_path).map_err(|e| {
                 eprintln!("Config load failed: {e}");
@@ -30,7 +33,8 @@ pub fn run() {
             let server_config = config.server.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = http::server::start_http_server(&server_config).await {
-                    eprintln!("HTTP server error: {e}");
+                    // TODO: replace with user-visible error (emit to WebView or native dialog)
+                    tracing::error!("HTTP server error: {e}");
                 }
             });
 
