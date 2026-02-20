@@ -1,12 +1,34 @@
-node_modules
-.pnpm-store
-.DS_Store
+# Logs
+logs
 *.log
-.omc
-apps/backend/data/*.db
-apps/backend/data/*.db-*
-apps/backend/apps/backend/data/*.db
-apps/backend/apps/backend/data/*.db-*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build output
 dist
-build
-coverage
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+Thumbs.db
+
+# Environment
+.env
+.env.*
