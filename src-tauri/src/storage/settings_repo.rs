@@ -32,6 +32,7 @@ impl SettingsRepo {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn delete(&self, key: &str) -> Result<bool, AppError> {
         let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let rows = conn.execute("DELETE FROM settings WHERE key = ?1", rusqlite::params![key])?;

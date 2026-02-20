@@ -110,9 +110,13 @@ pub async fn ingest_handler(
         state_machine::TransitionResult::Changed { prev_status, new_status } => {
             // 새 에이전트 등장
             if is_new_agent || (prev_status == AgentStatus::Offline && new_status == AgentStatus::Appearing) {
-                let slot_counts = state.slot_counts.lock()
-                    .map(|s| s.clone())
-                    .unwrap_or_default();
+                let slot_counts = match state.slot_counts.lock() {
+                    Ok(s) => s.clone(),
+                    Err(e) => {
+                        tracing::warn!("ingest: slot_counts lock poisoned, using defaults: {e}");
+                        SlotCounts::default()
+                    }
+                };
                 let appearance = appearance::generate_appearance(
                     &event.agent_id,
                     &slot_counts,
@@ -182,9 +186,13 @@ fn ensure_agent_registered(
         Ok(Some(_)) => false,
         Ok(None) => {
             // 신규 에이전트 등록
-            let slot_counts = state.slot_counts.lock()
-                .map(|s| s.clone())
-                .unwrap_or_default();
+            let slot_counts = match state.slot_counts.lock() {
+                Ok(s) => s.clone(),
+                Err(e) => {
+                    tracing::warn!("ingest: slot_counts lock poisoned, using defaults: {e}");
+                    SlotCounts::default()
+                }
+            };
             let appearance = appearance::generate_appearance(
                 &event.agent_id,
                 &slot_counts,

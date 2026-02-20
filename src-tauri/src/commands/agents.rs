@@ -200,7 +200,9 @@ async fn process_synthetic_event(
                 "agent_id": agent_id,
                 "ts": ts,
             });
-            let _ = app_handle.emit("mascot://agent-departed", &payload);
+            if let Err(e) = app_handle.emit("mascot://agent-departed", &payload) {
+                tracing::error!("process_synthetic_event: emit agent-departed failed: {e}");
+            }
         } else {
             let payload = serde_json::json!({
                 "agent_id": agent_id,
@@ -213,7 +215,9 @@ async fn process_synthetic_event(
                 "chat_message": serde_json::Value::Null,
                 "ts": ts,
             });
-            let _ = app_handle.emit("mascot://agent-update", &payload);
+            if let Err(e) = app_handle.emit("mascot://agent-update", &payload) {
+                tracing::error!("process_synthetic_event: emit agent-update failed: {e}");
+            }
         }
     }
 

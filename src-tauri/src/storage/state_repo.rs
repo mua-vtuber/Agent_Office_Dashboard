@@ -1,5 +1,5 @@
 use crate::error::AppError;
-use crate::models::agent::{AgentState, AgentStatus};
+use crate::models::agent::AgentState;
 use crate::storage::db::DbPool;
 
 fn row_to_agent_state(row: &rusqlite::Row<'_>) -> Result<AgentState, rusqlite::Error> {
@@ -108,6 +108,7 @@ impl StateRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::models::agent::AgentStatus;
     use crate::storage::db::init_db_in_memory;
 
     fn make_test_state(id: &str) -> AgentState {
