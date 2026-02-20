@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.hayoung.agent-mascot",
   "build": {
-    "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "pnpm build",
-    "frontendDist": "../dist"
+    "beforeDevCommand": "pnpm --filter @agent-mascot/webview dev",
+    "beforeBuildCommand": "pnpm --filter @agent-mascot/webview build",
+    "frontendDist": "../apps/webview/dist",
+    "devUrl": "http://localhost:1420"
   },
   "app": {
     "windows": [
@@ -18,7 +18,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

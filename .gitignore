@@ -32,3 +32,7 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Database
+*.db
+*.sqlite

@@ -1,33 +1,26 @@
-# Agent Office Dashboard 문서 인덱스
+# Agent Mascot 문서 인덱스
 
-이 폴더는 **현재 코드와 직접 연결되는 문서만** 유지한다.
-완료된 실행 계획, 아카이브 분석본, 샘플 payload 묶음은 제거했다.
+> **2026-02-20**: 프로젝트를 웹 대시보드에서 데스크탑 마스코트 앱으로 전환.
+> 기존 Office Dashboard 문서는 `archive/` 폴더로 이동 예정.
 
-## 1) 제품/아키텍처 기준
-- `product-spec.md`: 제품 목표/범위
-- `system-architecture.md`: 시스템 구성/흐름
-- `event-schema.md`: 수집 이벤트 계약
-- `state-machine.md`: 상태 전이 규칙
-- `settings-spec.md`: 설정 스키마/기본값
+## Mascot 스펙 (신규)
 
-## 2) 화면/도메인 스펙
-- `office-layout-spec.md`: 오피스 레이아웃 기준
-- `office-behavior-spec.md`: 상태별 연출 규칙
-- `agents-tab-spec.md`: Agents 탭 정보 구조
-- `session-routing.md`: 세션/터미널 스코프 라우팅
-- `time-travel-spec.md`: 이벤트 컨텍스트 조회 기준
-- `character-appearance-spec.md`: 캐릭터 외형 생성 규칙
-- `ui-art-direction.md`: UI 아트 방향
-- `performance-targets.md`: 성능 목표
+| 문서 | 설명 |
+|------|------|
+| `mascot-product-spec.md` | 제품 개요, 사용자 시나리오, 화면 구성, 설계 원칙 |
+| `mascot-architecture.md` | 시스템 아키텍처, 모듈 책임, 디렉토리 구조, 에러 처리 |
+| `mascot-state-machine.md` | 상태 정의(9개), 전이 매트릭스, 타이머 전이, 애니메이션 매핑 |
+| `mascot-spine-spec.md` | Spine 스켈레톤/스킨/애니메이션 요구사항, 외형 결정 알고리즘, 배치 규칙 |
+| `mascot-ipc-protocol.md` | Tauri IPC 이벤트/명령 정의, 페이로드 타입, 초기화 시퀀스 |
+| `mascot-hooks-integration.md` | Claude Code hooks 연동, 자동실행 로직, HTTP 엔드포인트 |
 
-## 3) 운영 문서
-- `hooks-quickstart.md`: Hook 연동 최소 설정
-- `global-hooks-template.json`: 전역 hooks 병합 템플릿
+## Archive
 
-## 4) 코드 진단/개선
-- `코드베이스-진단-개선-리포트.md`: 구조적 문제, UI 미연결 항목, 레거시, 개선 우선순위
+`archive/` 폴더에는 이전 Office Dashboard 문서가 보존되어 있다.
+핵심 내용(이벤트 스키마, Mulberry32 알고리즘 등)은 mascot-* 문서에 병합 완료.
 
 ## 문서 운영 원칙
+
 - 코드 변경 시 관련 스펙을 함께 갱신한다.
-- 신규 문서는 "현재 코드 동작을 설명/검증하는 목적"일 때만 추가한다.
-- 완료된 실행 계획/검토 로그/임시 분석은 재사용 가치가 없으면 남기지 않는다.
+- 하드코딩된 수치가 문서에 있으면 `config.toml` 참조로 변경한다.
+- 결정 사항은 각 문서의 "결정 로그" 섹션에 날짜와 이유를 기록한다.
