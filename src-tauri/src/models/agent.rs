@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// 에이전트 역할
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentRole {
     Manager,
@@ -11,7 +11,7 @@ pub enum AgentRole {
 }
 
 /// 고용 형태
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum EmploymentType {
     Employee,
@@ -19,7 +19,7 @@ pub enum EmploymentType {
 }
 
 /// 14개 에이전트 상태 (state-machine.md §2)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentStatus {
     Offline,

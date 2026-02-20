@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// 정규화 이벤트 타입 카탈로그 (hooks-integration.md §7.2)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum EventType {
     // 에이전트 라이프사이클
@@ -36,7 +36,7 @@ pub enum EventType {
 }
 
 /// 이벤트 소스
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum EventSource {
     Hook,
@@ -44,7 +44,7 @@ pub enum EventSource {
 }
 
 /// 심각도
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum Severity {
     Debug,
