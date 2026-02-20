@@ -117,6 +117,46 @@ impl AppConfig {
             .into());
         }
 
+        if self.movement.walk_speed_px_per_sec <= 0.0 {
+            return Err(ConfigError::Validation {
+                field: "movement.walk_speed_px_per_sec".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.movement.behind_scale <= 0.0 || self.movement.behind_scale > 1.0 {
+            return Err(ConfigError::Validation {
+                field: "movement.behind_scale".into(),
+                reason: "must be in range (0.0, 1.0]".into(),
+            }
+            .into());
+        }
+
+        if self.heartbeat.interval_secs == 0 {
+            return Err(ConfigError::Validation {
+                field: "heartbeat.interval_secs".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.appearance.skin_lightness_max > 100.0 || self.appearance.skin_lightness_min < 0.0 {
+            return Err(ConfigError::Validation {
+                field: "appearance.skin_lightness".into(),
+                reason: "values must be in range [0.0, 100.0]".into(),
+            }
+            .into());
+        }
+
+        if self.appearance.skin_saturation_max > 100.0 || self.appearance.skin_saturation_min < 0.0 {
+            return Err(ConfigError::Validation {
+                field: "appearance.skin_saturation".into(),
+                reason: "values must be in range [0.0, 100.0]".into(),
+            }
+            .into());
+        }
+
         Ok(())
     }
 }

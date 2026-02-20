@@ -25,8 +25,8 @@ chat_timeout_secs = 5
 interval_secs = 10
 
 [movement]
-walk_speed_px_per_sec = 150
-arrival_distance_px = 30
+walk_speed_px_per_sec = 150.0
+arrival_distance_px = 30.0
 behind_scale = 0.9
 chat_queue_timeout_secs = 10
 
