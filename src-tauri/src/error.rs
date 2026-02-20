@@ -6,10 +6,11 @@ pub enum ConfigError {
     #[error("config file not found: {path}")]
     NotFound { path: String },
 
+    // TODO(task-5): replace String with #[from] toml::de::Error
     #[error("config parse error: {0}")]
     Parse(String),
 
-    #[error("config validation error: {field} — {reason}")]
+    #[error("config validation error: {field} - {reason}")]
     Validation { field: String, reason: String },
 }
 
@@ -19,6 +20,7 @@ pub enum AppError {
     #[error("config load failed: {0}")]
     Config(#[from] ConfigError),
 
+    // TODO(task-7): replace String with #[from] rusqlite::Error
     #[error("database error: {0}")]
     Database(String),
 
