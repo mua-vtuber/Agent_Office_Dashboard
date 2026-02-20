@@ -19,6 +19,8 @@ pub enum EventType {
     ToolStarted,
     ToolSucceeded,
     ToolFailed,
+    // 확장 사고
+    ThinkingUpdated,
     // 시스템
     Heartbeat,
     Notification,

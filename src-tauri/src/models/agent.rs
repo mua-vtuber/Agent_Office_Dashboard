@@ -43,6 +43,7 @@ pub enum AgentStatus {
 pub struct AgentState {
     pub agent_id: String,
     pub status: AgentStatus,
+    pub prev_status: Option<AgentStatus>,  // walking/returning 전의 상태 (복귀 시 복원)
     pub thinking_text: Option<String>,
     pub current_task: Option<String>,
     pub workspace_id: String,
