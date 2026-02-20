@@ -1,7 +1,9 @@
+mod commands;
 mod config;
 mod error;
 mod http;
 mod models;
+mod services;
 mod storage;
 mod tray;
 
@@ -43,6 +45,16 @@ pub fn run() {
 
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![
+            commands::agents::get_all_agents,
+            commands::agents::get_agent_resume,
+            commands::agents::set_slot_counts,
+            commands::agents::notify_animation_done,
+            commands::agents::notify_movement_done,
+            commands::agents::notify_chat_done,
+            commands::agents::get_display_config,
+            commands::window::toggle_click_through,
+        ])
         .run(tauri::generate_context!())
         .expect("Fatal: failed to start tauri application");
 }

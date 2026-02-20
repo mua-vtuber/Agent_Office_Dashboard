@@ -1,5 +1,5 @@
 use crate::error::{AppError, ConfigError};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Deserialize, Clone)]
@@ -20,7 +20,7 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DisplayConfig {
     pub activity_zone_height_px: u32,
     pub taskbar_offset_px: u32,
