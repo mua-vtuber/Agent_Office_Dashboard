@@ -3,6 +3,7 @@ mod error;
 mod http;
 mod models;
 mod storage;
+mod tray;
 
 pub use config::AppConfig;
 pub use error::{AppError, ConfigError};
@@ -37,6 +38,8 @@ pub fn run() {
                     tracing::error!("HTTP server error: {e}");
                 }
             });
+
+            tray::setup_tray(app).map_err(|e| e.to_string())?;
 
             Ok(())
         })
