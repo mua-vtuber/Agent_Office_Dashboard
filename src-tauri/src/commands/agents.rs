@@ -1,4 +1,3 @@
-use crate::config::DisplayConfig;
 use crate::error::AppError;
 use crate::models::agent::*;
 use crate::models::event::*;
@@ -7,7 +6,23 @@ use crate::state::AppState;
 use crate::storage::agents_repo::AgentsRepo;
 use crate::storage::events_repo::EventsRepo;
 use crate::storage::state_repo::StateRepo;
+use serde::Serialize;
 use tauri::Emitter;
+
+/// WebView용 화면 배치 + 이동 설정 응답 (display + movement 합산)
+#[derive(Debug, Serialize, Clone)]
+pub struct DisplayConfigResponse {
+    pub activity_zone_height_px: u32,
+    pub taskbar_offset_px: u32,
+    pub character_spacing_px: u32,
+    pub group_spacing_px: u32,
+    pub max_bubble_chars: usize,
+    pub bubble_fade_ms: u64,
+    pub idle_sway_px: u32,
+    pub walk_speed_px_per_sec: f64,
+    pub arrival_distance_px: f64,
+    pub behind_scale: f64,
+}
 
 /// 모든 에이전트 + 현재 상태를 반환 (ipc-protocol.md §3.1)
 #[tauri::command]
@@ -140,11 +155,25 @@ pub async fn notify_chat_done(
 }
 
 /// 화면 배치 설정 반환 (ipc-protocol.md §3.1)
+/// display + movement 설정을 하나의 응답으로 합산하여 반환
 #[tauri::command]
 pub async fn get_display_config(
     state: tauri::State<'_, AppState>,
-) -> Result<DisplayConfig, AppError> {
-    Ok(state.config.display.clone())
+) -> Result<DisplayConfigResponse, AppError> {
+    let d = &state.config.display;
+    let m = &state.config.movement;
+    Ok(DisplayConfigResponse {
+        activity_zone_height_px: d.activity_zone_height_px,
+        taskbar_offset_px: d.taskbar_offset_px,
+        character_spacing_px: d.character_spacing_px,
+        group_spacing_px: d.group_spacing_px,
+        max_bubble_chars: d.max_bubble_chars,
+        bubble_fade_ms: d.bubble_fade_ms,
+        idle_sway_px: d.idle_sway_px,
+        walk_speed_px_per_sec: m.walk_speed_px_per_sec,
+        arrival_distance_px: m.arrival_distance_px,
+        behind_scale: m.behind_scale,
+    })
 }
 
 /// synthetic 이벤트를 처리하여 상태 전이 + emit 수행

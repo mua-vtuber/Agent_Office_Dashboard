@@ -4,12 +4,12 @@ import {
   AtlasAttachmentLoader,
   TextureAtlas,
 } from '@esotericsoftware/spine-pixi-v8';
-import { Assets } from 'pixi.js';
+import { Assets, Ticker } from 'pixi.js';
 
 import type { MascotAgent, AgentStatus, SlotCounts } from '../types/agent';
 import type { AgentUpdatePayload, DisplayConfig } from '../types/ipc';
-import { setSlotCounts } from '../tauri/commands';
-import { STATUS_BUBBLE_VISIBILITY } from './constants';
+import { setSlotCounts, notifyMovementDone } from '../tauri/commands';
+import { STATUS_BUBBLE_VISIBILITY, Z_INDEX } from './constants';
 import { MascotStage } from './MascotStage';
 import { SpineCharacter } from './SpineCharacter';
 import { SpeechBubble } from './SpeechBubble';
@@ -65,6 +65,15 @@ export class CharacterManager {
 
   /** Workspace groups keyed by workspace_id */
   private readonly workspaceGroups = new Map<string, WorkspaceGroup>();
+
+  /** Active movement tracking keyed by agent_id */
+  private readonly movingAgents = new Map<
+    string,
+    { targetX: number; peerAgentId?: string; type: 'walk' | 'return' }
+  >();
+
+  /** Bound reference to the ticker callback for add/remove */
+  private tickerCallback: ((ticker: Ticker) => void) | null = null;
 
   constructor(stage: MascotStage, displayConfig: DisplayConfig) {
     this.stage = stage;
@@ -233,25 +242,157 @@ export class CharacterManager {
   }
 
   /**
-   * Movement stub: begin walking a character toward a peer.
-   * Will be fully implemented in Task 8.
+   * Begin walking a character toward a peer character.
+   * Lowers z-index (passes BEHIND other characters) and applies perspective scale.
+   * Facing direction is set based on movement direction.
    */
-  startWalking(_agentId: string, _peerAgentId: string): void {
-    // Stub: movement system implemented in Task 8
+  startWalking(agentId: string, peerAgentId: string): void {
+    const walkerEntry = this.characters.get(agentId);
+    const peerEntry = this.characters.get(peerAgentId);
+    if (!walkerEntry || !peerEntry) return;
+
+    const walker = walkerEntry.character;
+    const targetX = peerEntry.character.homeX;
+
+    // Lower z-index so walker passes behind other characters
+    walker.container.zIndex = Z_INDEX.BEHIND;
+
+    // Apply perspective scale while walking
+    const scale = this.displayConfig.behind_scale;
+    walker.container.scale.set(scale, scale);
+
+    // Set facing direction: right (+1) if target is to the right, left (-1) otherwise
+    const direction: 1 | -1 = targetX >= walker.container.x ? 1 : -1;
+    walker.setFacing(direction);
+
+    // Mark as moving
+    walker.isMoving = true;
+
+    // Track in moving map
+    this.movingAgents.set(agentId, { targetX, peerAgentId, type: 'walk' });
+
+    // Register ticker if this is the first moving agent
+    this.ensureTickerRegistered();
   }
 
   /**
-   * Movement stub: begin returning a character to its home position.
-   * Will be fully implemented in Task 8.
+   * Begin returning a character to its home position.
+   * Applies the same z-index and scale changes as walking.
    */
-  startReturning(_agentId: string): void {
-    // Stub: movement system implemented in Task 8
+  startReturning(agentId: string): void {
+    const entry = this.characters.get(agentId);
+    if (!entry) return;
+
+    const character = entry.character;
+    const targetX = character.homeX;
+
+    // Lower z-index so returner passes behind other characters
+    character.container.zIndex = Z_INDEX.BEHIND;
+
+    // Apply perspective scale while returning
+    const scale = this.displayConfig.behind_scale;
+    character.container.scale.set(scale, scale);
+
+    // Set facing direction toward home
+    const direction: 1 | -1 = targetX >= character.container.x ? 1 : -1;
+    character.setFacing(direction);
+
+    // Mark as moving
+    character.isMoving = true;
+
+    // Track in moving map
+    this.movingAgents.set(agentId, { targetX, type: 'return' });
+
+    // Register ticker if this is the first moving agent
+    this.ensureTickerRegistered();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private: Movement system
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ensure the ticker callback is registered when there are moving agents.
+   * Only registers once; the callback self-removes when no agents are moving.
+   */
+  private ensureTickerRegistered(): void {
+    if (this.tickerCallback) return;
+
+    this.tickerCallback = (ticker: Ticker) => {
+      this.tickMovement(ticker.deltaMS / 1000);
+    };
+    this.stage.app.ticker.add(this.tickerCallback);
+  }
+
+  /**
+   * Per-frame movement tick. Moves each active agent toward their target.
+   * When an agent arrives, restores z-index/scale and notifies Rust.
+   *
+   * @param deltaSec Time elapsed since last frame in seconds
+   */
+  private tickMovement(deltaSec: number): void {
+    const arrived: string[] = [];
+    const speed = this.displayConfig.walk_speed_px_per_sec;
+    const arrivalDist = this.displayConfig.arrival_distance_px;
+
+    for (const [agentId, movement] of this.movingAgents) {
+      const entry = this.characters.get(agentId);
+      if (!entry) {
+        arrived.push(agentId);
+        continue;
+      }
+
+      const character = entry.character;
+      const currentX = character.container.x;
+      const dx = movement.targetX - currentX;
+      const distance = Math.abs(dx);
+
+      if (distance <= arrivalDist) {
+        // Arrived at target — restore state
+        character.container.x = movement.targetX;
+        character.container.zIndex = Z_INDEX.NORMAL;
+        character.container.scale.set(1, 1);
+        character.isMoving = false;
+
+        // Reset facing to right (default)
+        character.setFacing(1);
+
+        arrived.push(agentId);
+
+        // Notify Rust of arrival
+        const movementType = movement.type === 'walk' ? 'arrive_at_peer' : 'arrive_at_home';
+        void notifyMovementDone(agentId, movementType);
+      } else {
+        // Move toward target
+        const step = speed * deltaSec;
+        const moveAmount = Math.min(step, distance);
+        character.container.x += dx > 0 ? moveAmount : -moveAmount;
+      }
+    }
+
+    // Remove arrived agents from tracking
+    for (const agentId of arrived) {
+      this.movingAgents.delete(agentId);
+    }
+
+    // Unregister ticker when no agents are moving
+    if (this.movingAgents.size === 0 && this.tickerCallback) {
+      this.stage.app.ticker.remove(this.tickerCallback);
+      this.tickerCallback = null;
+    }
   }
 
   /**
    * Clean up all characters, bubbles, and workspace labels.
    */
   destroy(): void {
+    // Clean up movement ticker
+    if (this.tickerCallback) {
+      this.stage.app.ticker.remove(this.tickerCallback);
+      this.tickerCallback = null;
+    }
+    this.movingAgents.clear();
+
     for (const [agentId] of this.characters) {
       this.removeAgent(agentId);
     }
