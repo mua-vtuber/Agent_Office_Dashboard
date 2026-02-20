@@ -1,0 +1,37 @@
+{
+  "tray": {
+    "show": "마스코트 표시",
+    "resume": "에이전트 이력서",
+    "language": "언어",
+    "autostart": "자동 실행",
+    "quit": "종료"
+  },
+  "resume": {
+    "title": "에이전트 이력서",
+    "all": "전체",
+    "employee": "정규직",
+    "contractor": "계약직",
+    "status": "상태",
+    "task": "작업",
+    "thinking": "생각"
+  },
+  "status": {
+    "offline": "오프라인",
+    "idle": "대기중",
+    "working": "작업중",
+    "thinking": "생각중",
+    "pending_input": "입력 대기중",
+    "failed": "실패",
+    "completed": "완료",
+    "resting": "휴식중",
+    "startled": "깜짝!",
+    "walking": "이동중",
+    "chatting": "대화중",
+    "returning": "복귀중"
+  },
+  "error": {
+    "title": "오류",
+    "dismiss": "닫기",
+    "fatal": "치명적 오류가 발생했습니다"
+  }
+}

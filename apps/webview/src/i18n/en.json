@@ -1,0 +1,37 @@
+{
+  "tray": {
+    "show": "Show Mascot",
+    "resume": "Agent Resume",
+    "language": "Language",
+    "autostart": "Auto Start",
+    "quit": "Quit"
+  },
+  "resume": {
+    "title": "Agent Resume",
+    "all": "All",
+    "employee": "Employee",
+    "contractor": "Contractor",
+    "status": "Status",
+    "task": "Task",
+    "thinking": "Thinking"
+  },
+  "status": {
+    "offline": "Offline",
+    "idle": "Idle",
+    "working": "Working",
+    "thinking": "Thinking",
+    "pending_input": "Waiting for Input",
+    "failed": "Failed",
+    "completed": "Completed",
+    "resting": "Resting",
+    "startled": "Startled!",
+    "walking": "Walking",
+    "chatting": "Chatting",
+    "returning": "Returning"
+  },
+  "error": {
+    "title": "Error",
+    "dismiss": "Dismiss",
+    "fatal": "A fatal error occurred"
+  }
+}
