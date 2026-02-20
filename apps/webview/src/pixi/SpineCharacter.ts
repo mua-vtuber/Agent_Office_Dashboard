@@ -2,6 +2,7 @@ import { Spine, Skin, SkeletonData, TrackEntry } from '@esotericsoftware/spine-p
 import { Container } from 'pixi.js';
 import type { AgentStatus, AppearanceProfile } from '../types/agent';
 import { notifyAnimationDone } from '../tauri/commands';
+import { useErrorStore } from '../stores/error-store';
 import {
   STATUS_TO_ANIMATION,
   LOOPING_ANIMATIONS,
@@ -174,7 +175,13 @@ export class SpineCharacter {
 
         const eventType = SYNTHETIC_ANIMATION_EVENTS[animationName];
         if (eventType) {
-          void notifyAnimationDone(this.agentId, eventType);
+          notifyAnimationDone(this.agentId, eventType).catch((err: unknown) => {
+            useErrorStore.getState().push({
+              source: 'SpineCharacter',
+              message: `notifyAnimationDone failed: ${String(err)}`,
+              ts: new Date().toISOString(),
+            });
+          });
         }
 
         // Special case: celebrate -> auto-transition to idle
@@ -188,8 +195,6 @@ export class SpineCharacter {
   /** Clean up the container and spine instance. */
   destroy(): void {
     this.spine.state.clearListeners();
-    this.container.removeChild(this.spine);
-    this.spine.destroy();
     this.container.destroy({ children: true });
   }
 }

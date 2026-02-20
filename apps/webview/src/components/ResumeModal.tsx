@@ -328,15 +328,15 @@ function ResumeDetail({ resume, onBack }: ResumeDetailProps) {
         <span>{t(`resume.${agent.employment_type}`)}</span>
       </div>
       <div style={statRowStyle}>
-        <span style={statLabelStyle}>Tasks Completed</span>
+        <span style={statLabelStyle}>{t('resume.tasks_completed')}</span>
         <span>{total_tasks_completed}</span>
       </div>
       <div style={statRowStyle}>
-        <span style={statLabelStyle}>Tools Used</span>
+        <span style={statLabelStyle}>{t('resume.tools_used')}</span>
         <span>{total_tools_used}</span>
       </div>
 
-      <div style={detailSectionTitle}>Recent Events</div>
+      <div style={detailSectionTitle}>{t('resume.recent_events')}</div>
       {recent_events.length === 0 ? (
         <div style={emptyStyle}>—</div>
       ) : (

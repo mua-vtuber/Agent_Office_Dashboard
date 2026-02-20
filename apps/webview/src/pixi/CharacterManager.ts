@@ -9,6 +9,7 @@ import { Assets, Ticker } from 'pixi.js';
 import type { MascotAgent, AgentStatus, SlotCounts } from '../types/agent';
 import type { AgentUpdatePayload, DisplayConfig } from '../types/ipc';
 import { setSlotCounts, notifyMovementDone } from '../tauri/commands';
+import { useErrorStore } from '../stores/error-store';
 import { STATUS_BUBBLE_VISIBILITY, Z_INDEX } from './constants';
 import { MascotStage } from './MascotStage';
 import { SpineCharacter } from './SpineCharacter';
@@ -357,16 +358,28 @@ export class CharacterManager {
         // Reset facing to right (default)
         character.setFacing(1);
 
+        // Sync bubble to final position
+        entry.bubble.container.x = character.container.x;
+
         arrived.push(agentId);
 
         // Notify Rust of arrival
         const movementType = movement.type === 'walk' ? 'arrive_at_peer' : 'arrive_at_home';
-        void notifyMovementDone(agentId, movementType);
+        notifyMovementDone(agentId, movementType).catch((err: unknown) => {
+          useErrorStore.getState().push({
+            source: 'CharacterManager',
+            message: `notifyMovementDone failed: ${String(err)}`,
+            ts: new Date().toISOString(),
+          });
+        });
       } else {
         // Move toward target
         const step = speed * deltaSec;
         const moveAmount = Math.min(step, distance);
         character.container.x += dx > 0 ? moveAmount : -moveAmount;
+
+        // Keep bubble in sync with character position
+        entry.bubble.container.x = character.container.x;
       }
     }
 
@@ -393,7 +406,9 @@ export class CharacterManager {
     }
     this.movingAgents.clear();
 
-    for (const [agentId] of this.characters) {
+    // Snapshot keys to avoid mutating the Map during iteration
+    const agentIds = [...this.characters.keys()];
+    for (const agentId of agentIds) {
       this.removeAgent(agentId);
     }
     // removeAgent already cleans up workspace groups, but ensure labels are gone

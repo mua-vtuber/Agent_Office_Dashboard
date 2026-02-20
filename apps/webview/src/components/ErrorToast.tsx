@@ -62,6 +62,16 @@ export default function ErrorToast() {
   const dismissedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Prune dismissed set — only keep keys still present in current errors
+    const currentKeys = new Set(
+      errors.map((e) => `${e.ts}:${e.source}:${e.message}`),
+    );
+    for (const key of dismissedRef.current) {
+      if (!currentKeys.has(key)) {
+        dismissedRef.current.delete(key);
+      }
+    }
+
     const timers: ReturnType<typeof setTimeout>[] = [];
 
     errors.forEach((error, index) => {

@@ -13,7 +13,10 @@
     "contractor": "Contractor",
     "status": "Status",
     "task": "Task",
-    "thinking": "Thinking"
+    "thinking": "Thinking",
+    "tasks_completed": "Tasks Completed",
+    "tools_used": "Tools Used",
+    "recent_events": "Recent Events"
   },
   "status": {
     "offline": "Offline",
@@ -27,7 +30,9 @@
     "startled": "Startled!",
     "walking": "Walking",
     "chatting": "Chatting",
-    "returning": "Returning"
+    "returning": "Returning",
+    "appearing": "Appearing",
+    "disappearing": "Disappearing"
   },
   "error": {
     "title": "Error",
