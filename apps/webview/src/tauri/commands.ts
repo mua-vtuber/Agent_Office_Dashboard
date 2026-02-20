@@ -40,6 +40,10 @@ export function getDisplayConfig(): Promise<DisplayConfig> {
   return safeInvoke<DisplayConfig>('get_display_config');
 }
 
+export function notifyChatDone(agentId: string): Promise<void> {
+  return safeInvoke<void>('notify_chat_done', { agentId });
+}
+
 export function toggleClickThrough(ignore: boolean): Promise<void> {
   return safeInvoke<void>('toggle_click_through', { ignore });
 }

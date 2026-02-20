@@ -13,7 +13,10 @@
     "contractor": "계약직",
     "status": "상태",
     "task": "작업",
-    "thinking": "생각"
+    "thinking": "생각",
+    "tasks_completed": "완료한 작업",
+    "tools_used": "사용한 도구",
+    "recent_events": "최근 이벤트"
   },
   "status": {
     "offline": "오프라인",
@@ -27,7 +30,9 @@
     "startled": "깜짝!",
     "walking": "이동중",
     "chatting": "대화중",
-    "returning": "복귀중"
+    "returning": "복귀중",
+    "appearing": "등장중",
+    "disappearing": "퇴장중"
   },
   "error": {
     "title": "오류",

@@ -48,6 +48,9 @@ export interface DisplayConfig {
   activity_zone_height_px: number;
   taskbar_offset_px: number;
   idle_sway_px: number;
+  walk_speed_px_per_sec: number;
+  arrival_distance_px: number;
+  behind_scale: number;
 }
 
 export interface AgentResume {
