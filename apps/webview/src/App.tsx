@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAgentStore } from './stores/agent-store';
 import { useErrorStore } from './stores/error-store';
 import { useUiStore } from './stores/ui-store';
-import { getAllAgents, getDisplayConfig } from './tauri/commands';
+import { getAllAgents, getDisplayConfig, toggleClickThrough } from './tauri/commands';
 import {
   onAgentAppeared,
   onAgentUpdate,
@@ -65,7 +65,11 @@ function App() {
       }
       managerRef.current = manager;
 
-      // 4. 기존 에이전트 복원 — store + CharacterManager 동시 추가
+      // 4. 클릭 통과 활성화 — 투명 오버레이가 데스크톱 조작을 막지 않도록
+      await toggleClickThrough(true);
+      if (destroyed) return [];
+
+      // 5. 기존 에이전트 복원 — store + CharacterManager 동시 추가
       const existingAgents = await getAllAgents();
       if (!destroyed) {
         for (const agent of existingAgents) {

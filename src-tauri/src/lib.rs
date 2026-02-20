@@ -22,14 +22,28 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             // 1. config.toml 로드
-            let config_path = app
-                .path()
-                .resource_dir()
-                .map(|d| d.join("config.toml"))
-                .unwrap_or_else(|e| {
-                    tracing::warn!("resource_dir() failed ({e}), falling back to ./config.toml");
-                    std::path::PathBuf::from("config.toml")
-                });
+            // 프로덕션: resource_dir()에서 번들된 config.toml 사용
+            // 개발 모드: resource_dir()에 파일이 없으면 src-tauri/ (CARGO_MANIFEST_DIR) 폴백
+            let config_path = {
+                let resource_path = app
+                    .path()
+                    .resource_dir()
+                    .map(|d| d.join("config.toml"))
+                    .unwrap_or_else(|e| {
+                        tracing::warn!("resource_dir() failed ({e})");
+                        std::path::PathBuf::from("config.toml")
+                    });
+
+                if resource_path.exists() {
+                    resource_path
+                } else {
+                    // 개발 모드 폴백: Cargo.toml이 있는 src-tauri/ 디렉토리
+                    let dev_path =
+                        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("config.toml");
+                    tracing::info!("Dev mode: using config at {}", dev_path.display());
+                    dev_path
+                }
+            };
 
             let config = AppConfig::load(&config_path).map_err(|e| {
                 eprintln!("Config load failed: {e}");
@@ -78,7 +92,29 @@ pub fn run() {
                 services::heartbeat::run_heartbeat(heartbeat_state, heartbeat_handle).await;
             });
 
-            // 6. 시스템 트레이
+            // 6. 창 설정 — 전체 화면 크기 + 클릭 통과
+            if let Some(window) = app.get_webview_window("main") {
+                // 모니터 크기에 맞춰 창 위치/크기 설정 (fullscreen 대신)
+                if let Ok(monitor) = window.current_monitor() {
+                    if let Some(monitor) = monitor {
+                        let size = monitor.size();
+                        let pos = monitor.position();
+                        let _ = window.set_position(tauri::Position::Physical(
+                            tauri::PhysicalPosition::new(pos.x, pos.y),
+                        ));
+                        let _ = window.set_size(tauri::Size::Physical(
+                            tauri::PhysicalSize::new(size.width, size.height),
+                        ));
+                    }
+                }
+
+                // 클릭 통과 활성화 — WebView 로드 전에도 데스크톱 조작 가능하도록
+                if let Err(e) = window.set_ignore_cursor_events(true) {
+                    tracing::warn!("Failed to set initial click-through: {e}");
+                }
+            }
+
+            // 7. 시스템 트레이
             tray::setup_tray(app).map_err(|e| e.to_string())?;
 
             Ok(())

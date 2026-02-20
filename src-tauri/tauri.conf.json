@@ -19,17 +19,23 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": false,
-        "fullscreen": true,
-        "focus": false
+        "maximizable": false,
+        "fullscreen": false,
+        "focus": false,
+        "width": 1920,
+        "height": 1080
       }
     ],
     "security": {
-      "csp": "default-src 'self' tauri://localhost; connect-src 'self' tauri://localhost; img-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; worker-src blob:"
+      "csp": "default-src 'self' tauri://localhost; connect-src 'self' tauri://localhost ipc://localhost; img-src 'self' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src blob:"
     }
   },
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": [
+      "config.toml"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

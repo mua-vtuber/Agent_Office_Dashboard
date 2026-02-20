@@ -21,6 +21,9 @@ export class MascotStage {
       autoDensity: true,
     });
 
+    // zIndex 기반 정렬 활성화 (캐릭터, 버블, 라벨 레이어링)
+    this.app.stage.sortableChildren = true;
+
     container.appendChild(this.app.canvas as HTMLCanvasElement);
   }
 
