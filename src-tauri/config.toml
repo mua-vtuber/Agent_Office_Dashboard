@@ -1,0 +1,43 @@
+[server]
+host = "127.0.0.1"
+port = 4820
+
+[display]
+activity_zone_height_px = 120
+taskbar_offset_px = 48
+character_spacing_px = 60
+group_spacing_px = 150
+max_bubble_chars = 80
+bubble_fade_ms = 3000
+idle_sway_px = 2
+
+[state_machine]
+fatal_keywords = ["permission denied", "not found", "ENOENT", "EACCES"]
+retryable_keywords = ["timeout", "EAGAIN", "rate limit", "ECONNREFUSED"]
+fatal_consecutive_failures = 3
+
+[state_machine.timer_transitions]
+idle_to_resting_secs = 120
+completed_to_disappear_secs = 60
+chat_timeout_secs = 5
+
+[heartbeat]
+interval_secs = 10
+
+[movement]
+walk_speed_px_per_sec = 150
+arrival_distance_px = 30
+behind_scale = 0.9
+chat_queue_timeout_secs = 10
+
+[appearance]
+skin_saturation_min = 25.0
+skin_saturation_max = 54.0
+skin_lightness_min = 75.0
+skin_lightness_max = 89.0
+
+[resume]
+recent_events_limit = 20
+
+[auth]
+token = ""

@@ -1,5 +1,7 @@
+mod config;
 mod error;
 
+pub use config::AppConfig;
 pub use error::{AppError, ConfigError};
 
 pub fn run() {

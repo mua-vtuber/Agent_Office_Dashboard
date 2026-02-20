@@ -6,9 +6,8 @@ pub enum ConfigError {
     #[error("config file not found: {path}")]
     NotFound { path: String },
 
-    // TODO(task-5): replace String with #[from] toml::de::Error
     #[error("config parse error: {0}")]
-    Parse(String),
+    Parse(#[from] toml::de::Error),
 
     #[error("config validation error: {field} - {reason}")]
     Validation { field: String, reason: String },
