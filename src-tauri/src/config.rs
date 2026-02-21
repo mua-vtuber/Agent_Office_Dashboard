@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub appearance: AppearanceConfig,
     pub resume: ResumeConfig,
     pub auth: AuthConfig,
+    pub drag: DragConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -75,6 +76,14 @@ pub struct ResumeConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct AuthConfig {
     pub token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DragConfig {
+    pub poll_interval_ms: u64,
+    pub hit_padding_px: i32,
+    pub snap_to_ground: bool,
+    pub return_to_home_on_release: bool,
 }
 
 impl AppConfig {
@@ -153,6 +162,14 @@ impl AppConfig {
             return Err(ConfigError::Validation {
                 field: "appearance.skin_saturation".into(),
                 reason: "values must be in range [0.0, 100.0]".into(),
+            }
+            .into());
+        }
+
+        if self.drag.poll_interval_ms == 0 {
+            return Err(ConfigError::Validation {
+                field: "drag.poll_interval_ms".into(),
+                reason: "must be > 0".into(),
             }
             .into());
         }

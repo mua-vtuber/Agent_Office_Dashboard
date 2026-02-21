@@ -41,3 +41,9 @@ recent_events_limit = 20
 
 [auth]
 token = ""
+
+[drag]
+poll_interval_ms = 16
+hit_padding_px = 10
+snap_to_ground = true
+return_to_home_on_release = false
