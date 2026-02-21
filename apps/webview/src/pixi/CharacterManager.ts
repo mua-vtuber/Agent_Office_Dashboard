@@ -251,6 +251,11 @@ export class CharacterManager {
     return entry?.character ?? null;
   }
 
+  /** 모든 에이전트 ID 반환. DragController 충돌 체크용. */
+  getAllAgentIds(): string[] {
+    return [...this.characters.keys()];
+  }
+
   /**
    * Return hit zones for all characters in physical pixel coordinates.
    * Used by DragController to send to Rust for cursor polling.
