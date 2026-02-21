@@ -30,6 +30,7 @@ export class SpineCharacter {
 
   private _homeX = 0;
   private _isMoving = false;
+  private _isDragged = false;
   private _currentStatus: AgentStatus = 'offline';
 
   constructor(skeletonData: SkeletonData, agentId: string, appearance: AppearanceProfile) {
@@ -64,6 +65,11 @@ export class SpineCharacter {
 
   set isMoving(value: boolean) {
     this._isMoving = value;
+  }
+
+  /** Whether the character is currently being dragged. */
+  get isDragged(): boolean {
+    return this._isDragged;
   }
 
   /** Current status of the character. */
@@ -124,6 +130,40 @@ export class SpineCharacter {
 
     const loop = LOOPING_ANIMATIONS.has(animationName);
     this.spine.state.setAnimation(0, animationName, loop);
+  }
+
+  /** Start drag — play grabbed animation, raise zIndex. */
+  startDrag(): void {
+    this._isDragged = true;
+    this._isMoving = false;
+    this.container.zIndex = Z_INDEX.DRAGGED;
+
+    // grabbed 애니메이션이 있으면 재생, 없으면 현재 유지
+    const grabAnim = this.spine.skeleton.data.findAnimation('grabbed');
+    if (grabAnim) {
+      this.spine.state.setAnimation(0, 'grabbed', true);
+    }
+  }
+
+  /** End drag — restore previous status animation, normalize zIndex. */
+  endDrag(): void {
+    this._isDragged = false;
+    this.container.zIndex = Z_INDEX.NORMAL;
+    this.transitionTo(this._currentStatus);
+  }
+
+  /**
+   * Return bounding box in physical pixel coordinates.
+   * Used by DragController to send hit zones to Rust.
+   */
+  getPhysicalBounds(dpr: number): { x: number; y: number; width: number; height: number } {
+    const b = this.container.getBounds();
+    return {
+      x: Math.round(b.x * dpr),
+      y: Math.round(b.y * dpr),
+      width: Math.round(b.width * dpr),
+      height: Math.round(b.height * dpr),
+    };
   }
 
   /**

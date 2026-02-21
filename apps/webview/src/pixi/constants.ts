@@ -20,7 +20,7 @@ export const STATUS_TO_ANIMATION: Record<AgentStatus, string> = {
 
 /** Looping animations */
 export const LOOPING_ANIMATIONS = new Set([
-  'idle', 'working', 'thinking', 'resting', 'chatting', 'walking',
+  'idle', 'working', 'thinking', 'resting', 'chatting', 'walking', 'grabbed',
 ]);
 
 /** Animation mix (blend) times in seconds. Key: "from/to" */
@@ -49,6 +49,7 @@ export const Z_INDEX = {
   NORMAL: 10,
   BUBBLE: 20,
   LABEL: 25,
+  DRAGGED: 30,
 } as const;
 
 /** One-shot animations that need synthetic event reporting to Rust */
