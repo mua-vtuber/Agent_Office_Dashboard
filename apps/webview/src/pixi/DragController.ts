@@ -18,7 +18,12 @@ interface VelocitySample {
   dt: number;
 }
 
-type DragPhase = 'idle' | 'dragging' | 'flying' | 'sliding';
+interface PhysicsState {
+  character: SpineCharacter;
+  vx: number;
+  vy: number;
+  phase: 'flying' | 'sliding' | 'pushed';
+}
 
 /**
  * 캐릭터 드래그 이동을 관리하는 컨트롤러.
@@ -26,9 +31,13 @@ type DragPhase = 'idle' | 'dragging' | 'flying' | 'sliding';
  * 동작 흐름:
  * 1. Rust 커서 폴링이 hover 감지 -> click-through 일시 해제
  * 2. pointerdown -> grabbed 애니메이션 + 드래그 시작
- * 3. pointermove -> 캐릭터 추적 + 속도 샘플링
- * 4. pointerup -> 물리 시뮬레이션 (관성 + 중력)
- * 5. 착지 -> landing 애니메이션 + 겹침 해소 + 위치 저장
+ * 3. pointermove -> 캐릭터 추적 + 속도 샘플링 + 실시간 충돌
+ * 4. pointerup -> physicsCharacters에 등록 (flying/sliding/즉시착지)
+ * 5. ticker -> 다중 물리 시뮬레이션 (관성 + 중력 + 튕김 + 충돌)
+ * 6. 착지/정지 -> landing 애니메이션 + 위치 저장 + idle 전환
+ *
+ * 다중 물리: 여러 캐릭터가 동시에 독립적으로 물리 적용.
+ * 날아가는 중에 다른 캐릭터를 잡아 다시 던질 수 있음.
  */
 export class DragController {
   private readonly stage: MascotStage;
@@ -41,8 +50,8 @@ export class DragController {
   // -- Hover state --
   private hoveredAgentId: string | null = null;
 
-  // -- Drag state --
-  private phase: DragPhase = 'idle';
+  // -- Drag state (단일: 현재 손으로 잡고 있는 캐릭터) --
+  private dragPhase: 'idle' | 'dragging' = 'idle';
   private draggedCharacter: SpineCharacter | null = null;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
@@ -53,10 +62,10 @@ export class DragController {
   private lastPointerY = 0;
   private lastPointerTime = 0;
 
-  // -- Physics state --
-  private vx = 0;
-  private vy = 0;
+  // -- Physics state (복수: 독립적으로 움직이는 캐릭터들) --
+  private readonly physicsCharacters = new Map<string, PhysicsState>();
   private tickerCallback: ((ticker: Ticker) => void) | null = null;
+  private hitZoneTickCounter = 0;
 
   // -- Bound event handlers --
   private readonly onPointerDown: (e: PointerEvent) => void;
@@ -111,10 +120,8 @@ export class DragController {
       this.unlistenHover = null;
     }
 
-    if (this.tickerCallback) {
-      this.stage.app.ticker.remove(this.tickerCallback);
-      this.tickerCallback = null;
-    }
+    this.stopPhysicsTicker();
+    this.physicsCharacters.clear();
 
     await setCursorPolling(false);
   }
@@ -135,8 +142,8 @@ export class DragController {
 
   private handleCursorHover(payload: CursorHoverPayload): void {
     // 드래그 중에만 hover 무시 (이미 잡고 있으니까)
-    // flying/sliding 중에는 허용 → 날아가는 캐릭터를 다시 잡을 수 있음
-    if (this.phase === 'dragging') return;
+    // 물리 중에는 허용 → 날아가는 캐릭터를 다시 잡을 수 있음
+    if (this.dragPhase === 'dragging') return;
 
     if (payload.hovered_agent_id) {
       if (!this.hoveredAgentId) {
@@ -161,23 +168,12 @@ export class DragController {
     const character = this.manager.getCharacter(this.hoveredAgentId);
     if (!character) return;
 
-    // 물리 시뮬레이션 중이면 즉시 중단
-    if (this.phase === 'flying' || this.phase === 'sliding') {
-      this.stopPhysicsTicker();
-      this.vx = 0;
-      this.vy = 0;
-      // 이전 draggedCharacter와 다른 캐릭터를 잡으면 이전 것을 착지시킴
-      if (this.draggedCharacter && this.draggedCharacter !== character) {
-        this.draggedCharacter.container.y = this.stage.groundY;
-        this.manager.setCharacterHomeX(
-          this.draggedCharacter.agentId,
-          this.draggedCharacter.container.x,
-        );
-        this.draggedCharacter.transitionTo(this.draggedCharacter.currentStatus);
-      }
+    // 물리 중인 캐릭터를 다시 잡으면 → physicsCharacters에서 제거 (재잡기)
+    if (this.physicsCharacters.has(this.hoveredAgentId)) {
+      this.physicsCharacters.delete(this.hoveredAgentId);
     }
 
-    this.phase = 'dragging';
+    this.dragPhase = 'dragging';
     this.draggedCharacter = character;
 
     // 진행 중인 이동 취소
@@ -201,19 +197,17 @@ export class DragController {
   }
 
   private handlePointerMove(e: PointerEvent): void {
-    if (this.phase !== 'dragging' || !this.draggedCharacter) return;
+    if (this.dragPhase !== 'dragging' || !this.draggedCharacter) return;
 
     const now = performance.now();
     const dt = now - this.lastPointerTime;
 
-    // 속도 샘플 기록
     if (dt > 0) {
       this.velocitySamples.push({
         dx: e.clientX - this.lastPointerX,
         dy: e.clientY - this.lastPointerY,
         dt,
       });
-      // 최근 N개만 유지
       if (this.velocitySamples.length > this.config.drag_velocity_samples) {
         this.velocitySamples.shift();
       }
@@ -223,46 +217,65 @@ export class DragController {
     this.lastPointerY = e.clientY;
     this.lastPointerTime = now;
 
-    // 캐릭터 위치 업데이트 (화면 경계 클램프)
     const newX = clamp(e.clientX - this.dragOffsetX, 0, window.innerWidth);
     const newY = clamp(e.clientY - this.dragOffsetY, 0, this.stage.groundY);
 
     this.draggedCharacter.container.x = newX;
     this.draggedCharacter.container.y = newY;
+
+    // 실시간 충돌 체크 (드래그 중)
+    this.checkCollisions(this.draggedCharacter);
   }
 
   private handlePointerUp(_e: PointerEvent): void {
-    if (this.phase !== 'dragging' || !this.draggedCharacter) return;
+    if (this.dragPhase !== 'dragging' || !this.draggedCharacter) return;
 
-    // 릴리스 속도 계산
     const vel = this.computeReleaseVelocity();
-    this.vx = vel.vx;
-    this.vy = vel.vy;
-
     const character = this.draggedCharacter;
     character.endDrag();
 
-    // 손을 놓는 즉시 click-through 복원 — 물리 시뮬레이션에 포인터 입력 불필요
+    // click-through 즉시 복원
     void toggleClickThrough(true);
     this.hoveredAgentId = null;
 
-    // 바닥에 있으면 바로 착지 처리
-    if (character.container.y >= this.stage.groundY) {
-      this.handleLanding(character);
-      return;
-    }
+    // drag 상태 초기화
+    this.dragPhase = 'idle';
+    this.draggedCharacter = null;
 
-    // 공중이면 물리 시뮬레이션 시작
-    character.playFalling();
-    this.phase = 'flying';
-    this.startPhysicsTicker();
+    const groundY = this.stage.groundY;
+
+    if (character.container.y < groundY) {
+      // 공중 → flying
+      character.playFalling();
+      this.physicsCharacters.set(character.agentId, {
+        character,
+        vx: vel.vx,
+        vy: vel.vy,
+        phase: 'flying',
+      });
+      this.ensurePhysicsTicker();
+    } else if (Math.abs(vel.vx) > 1) {
+      // 바닥 + X 관성 → sliding
+      character.container.y = groundY;
+      this.physicsCharacters.set(character.agentId, {
+        character,
+        vx: vel.vx,
+        vy: 0,
+        phase: 'sliding',
+      });
+      this.ensurePhysicsTicker();
+    } else {
+      // 바닥 + 정지 → 즉시 착지
+      character.container.y = groundY;
+      this.handleLanding(character);
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Physics simulation
   // ---------------------------------------------------------------------------
 
-  private startPhysicsTicker(): void {
+  private ensurePhysicsTicker(): void {
     if (this.tickerCallback) return;
 
     this.hitZoneTickCounter = 0;
@@ -279,69 +292,152 @@ export class DragController {
     }
   }
 
-  /** 히트존 갱신 스로틀 — 물리 중 매 프레임이 아닌 ~100ms 간격 */
-  private hitZoneTickCounter = 0;
-
   private tickPhysics(deltaSec: number): void {
-    const character = this.draggedCharacter;
-    if (!character) {
-      this.stopPhysicsTicker();
-      return;
-    }
-
     const groundY = this.stage.groundY;
 
-    // 물리 중 히트존 갱신 (~100ms 간격, 60fps 기준 6프레임마다)
+    // 히트존 갱신 스로틀 (~100ms)
     this.hitZoneTickCounter++;
     if (this.hitZoneTickCounter >= 6) {
       this.hitZoneTickCounter = 0;
       this.sendHitZones();
     }
 
-    if (this.phase === 'flying') {
-      // 중력 적용
-      this.vy += this.config.drag_gravity * deltaSec;
+    const finished: string[] = [];
 
-      // 관성 이동
-      this.vx *= this.config.drag_friction;
-      character.container.x += this.vx * deltaSec;
-      character.container.y += this.vy * deltaSec;
+    for (const [agentId, state] of this.physicsCharacters) {
+      if (state.phase === 'flying') {
+        state.vy += this.config.drag_gravity * deltaSec;
+        state.vx *= this.config.drag_friction;
+        state.character.container.x += state.vx * deltaSec;
+        state.character.container.y += state.vy * deltaSec;
 
-      // X 화면 경계
-      if (character.container.x <= 0) {
-        character.container.x = 0;
-        this.vx = 0;
-      } else if (character.container.x >= window.innerWidth) {
-        character.container.x = window.innerWidth;
-        this.vx = 0;
+        this.bounceX(state);
+        this.checkCollisions(state.character);
+
+        if (state.character.container.y >= groundY) {
+          state.character.container.y = groundY;
+          state.character.playLanding();
+          state.vy = 0;
+          state.phase = 'sliding';
+        }
+      } else if (state.phase === 'sliding') {
+        state.vx *= this.config.drag_friction;
+        state.character.container.x += state.vx * deltaSec;
+
+        this.bounceX(state);
+        this.checkCollisions(state.character);
+
+        if (Math.abs(state.vx) < 1) {
+          state.vx = 0;
+          this.handleLanding(state.character, false);
+          finished.push(agentId);
+        }
+      } else if (state.phase === 'pushed') {
+        state.vx *= this.config.drag_friction;
+        state.character.container.x += state.vx * deltaSec;
+
+        this.bounceX(state);
+
+        if (Math.abs(state.vx) < 1) {
+          state.vx = 0;
+          this.manager.setCharacterHomeX(agentId, state.character.container.x);
+          finished.push(agentId);
+        }
+      }
+    }
+
+    for (const agentId of finished) {
+      this.physicsCharacters.delete(agentId);
+    }
+
+    if (this.physicsCharacters.size === 0) {
+      this.stopPhysicsTicker();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Wall bounce
+  // ---------------------------------------------------------------------------
+
+  /**
+   * X 벽 충돌 체크 + 튕김 처리.
+   * Spine 바운드 기준으로 화면 밖이면 안쪽으로 보정하고 vx를 반전.
+   */
+  private bounceX(state: PhysicsState): void {
+    const bounds = state.character.container.getBounds();
+    const screenW = window.innerWidth;
+    const bounce = this.config.drag_bounce_factor;
+
+    if (bounds.x < 0) {
+      state.character.container.x -= bounds.x;
+      state.vx = Math.abs(state.vx) * bounce;
+    } else if (bounds.x + bounds.width > screenW) {
+      state.character.container.x -= (bounds.x + bounds.width - screenW);
+      state.vx = -Math.abs(state.vx) * bounce;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Collision detection
+  // ---------------------------------------------------------------------------
+
+  /**
+   * 이동 중인 캐릭터와 다른 캐릭터의 AABB 겹침을 체크하고 밀기 처리.
+   * 연쇄 충돌은 한 프레임 최대 2회 반복.
+   */
+  private checkCollisions(movingCharacter: SpineCharacter): void {
+    const padding = this.config.drag_collision_padding;
+    const strength = this.config.drag_push_strength;
+
+    for (let pass = 0; pass < 2; pass++) {
+      let anyPush = false;
+
+      const allIds = this.manager.getAllAgentIds();
+      for (const agentId of allIds) {
+        const other = this.manager.getCharacter(agentId);
+        if (!other) continue;
+        if (other === movingCharacter) continue;
+        if (other.isDragged) continue;
+
+        // flying/sliding 중인 캐릭터는 밀지 않음 (독립 물리)
+        const existingState = this.physicsCharacters.get(agentId);
+        if (existingState && existingState.phase !== 'pushed') continue;
+
+        const aBounds = movingCharacter.container.getBounds();
+        const bBounds = other.container.getBounds();
+
+        const overlapX = Math.min(aBounds.x + aBounds.width, bBounds.x + bBounds.width)
+          - Math.max(aBounds.x, bBounds.x);
+        const overlapY = Math.min(aBounds.y + aBounds.height, bBounds.y + bBounds.height)
+          - Math.max(aBounds.y, bBounds.y);
+
+        if (overlapX > 0 && overlapY > 0) {
+          const direction = other.container.x >= movingCharacter.container.x ? 1 : -1;
+          const pushVx = direction * (overlapX + padding) * strength;
+
+          // 즉시 겹침 해소
+          other.container.x += direction * (overlapX + padding);
+
+          if (existingState) {
+            existingState.vx += pushVx;
+          } else {
+            this.physicsCharacters.set(agentId, {
+              character: other,
+              vx: pushVx,
+              vy: 0,
+              phase: 'pushed',
+            });
+          }
+
+          anyPush = true;
+        }
       }
 
-      // 착지 판정
-      if (character.container.y >= groundY) {
-        character.container.y = groundY;
-        character.playLanding();
-        this.vy = 0;
-        this.phase = 'sliding';
-      }
-    } else if (this.phase === 'sliding') {
-      // 바닥 미끄러짐 (X만)
-      this.vx *= this.config.drag_friction;
-      character.container.x += this.vx * deltaSec;
+      if (!anyPush) break;
+    }
 
-      // X 화면 경계
-      if (character.container.x <= 0) {
-        character.container.x = 0;
-        this.vx = 0;
-      } else if (character.container.x >= window.innerWidth) {
-        character.container.x = window.innerWidth;
-        this.vx = 0;
-      }
-
-      // 정지 판정
-      if (Math.abs(this.vx) < 1) {
-        this.vx = 0;
-        this.handleLanding(character);
-      }
+    if (this.physicsCharacters.size > 0) {
+      this.ensurePhysicsTicker();
     }
   }
 
@@ -349,37 +445,28 @@ export class DragController {
   // Landing
   // ---------------------------------------------------------------------------
 
-  private handleLanding(character: SpineCharacter): void {
-    this.stopPhysicsTicker();
-
+  /**
+   * 드래그 캐릭터 착지 처리.
+   * @param playAnim true면 landing 애니메이션 재생 (즉시 착지용),
+   *                 false면 이미 재생됨 (flying→sliding→정지 경로)
+   */
+  private handleLanding(character: SpineCharacter, playAnim = true): void {
     character.container.y = this.stage.groundY;
 
-    // landing 애니메이션이 아직 재생 안 됐으면 재생
-    if (this.phase !== 'sliding') {
+    if (playAnim) {
       character.playLanding();
     }
 
-    // 겹침 해소
-    this.manager.resolveOverlap(character.agentId);
-
-    // 새 homeX 저장
     const finalX = character.container.x;
     this.manager.setCharacterHomeX(character.agentId, finalX);
     void notifyDragDrop(character.agentId, finalX);
 
-    // idle 전환 (landing 완료 후)
-    // landing은 0.4초 one-shot -- 완료 후 idle로
     setTimeout(() => {
       if (!character.isDragged) {
         character.transitionTo(character.currentStatus);
       }
     }, 400);
 
-    // 상태 초기화
-    this.phase = 'idle';
-    this.draggedCharacter = null;
-
-    // 히트존 즉시 갱신
     this.sendHitZones();
   }
 
