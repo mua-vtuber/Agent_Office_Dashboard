@@ -1,42 +1,64 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { Ticker } from 'pixi.js';
+import type { UnlistenFn } from '@tauri-apps/api/event';
 import {
   toggleClickThrough,
   setCursorPolling,
   setHitZones,
   notifyDragDrop,
 } from '../tauri/commands';
-import type { CursorHoverPayload, DragConfig } from '../types/ipc';
+import { onCursorHover } from '../tauri/events';
+import type { CursorHoverPayload, DisplayConfig } from '../types/ipc';
 import type { MascotStage } from './MascotStage';
 import type { CharacterManager } from './CharacterManager';
 import type { SpineCharacter } from './SpineCharacter';
 
+interface VelocitySample {
+  dx: number;
+  dy: number;
+  dt: number;
+}
+
+type DragPhase = 'idle' | 'dragging' | 'flying' | 'sliding';
+
 /**
- * Manages character drag-and-drop interaction.
+ * 캐릭터 드래그 이동을 관리하는 컨트롤러.
  *
- * Flow:
- * 1. enable() — start cursor polling + send hit zones periodically + subscribe to hover events
- * 2. Rust polls GetCursorPos, compares with hit zones → emits mascot://cursor-hover
- * 3. On hover → disable click-through so WebView receives pointer events
- * 4. pointerdown → start drag (grabbed animation)
- * 5. pointermove → move character
- * 6. pointerup → end drag → save position → restore click-through
+ * 동작 흐름:
+ * 1. Rust 커서 폴링이 hover 감지 -> click-through 일시 해제
+ * 2. pointerdown -> grabbed 애니메이션 + 드래그 시작
+ * 3. pointermove -> 캐릭터 추적 + 속도 샘플링
+ * 4. pointerup -> 물리 시뮬레이션 (관성 + 중력)
+ * 5. 착지 -> landing 애니메이션 + 겹침 해소 + 위치 저장
  */
 export class DragController {
   private readonly stage: MascotStage;
   private readonly manager: CharacterManager;
-  private readonly dragConfig: DragConfig;
+  private readonly config: DisplayConfig;
 
   private unlistenHover: UnlistenFn | null = null;
   private hitZoneInterval: ReturnType<typeof setInterval> | null = null;
 
-  /** Currently hovered character (cursor is over it) */
-  private hoveredCharacter: SpineCharacter | null = null;
-  /** Currently dragged character */
-  private draggedCharacter: SpineCharacter | null = null;
-  /** Cursor-character offset at drag start */
-  private dragOffsetX = 0;
+  // -- Hover state --
+  private hoveredAgentId: string | null = null;
 
-  /** Bound event handler references for removal */
+  // -- Drag state --
+  private phase: DragPhase = 'idle';
+  private draggedCharacter: SpineCharacter | null = null;
+  private dragOffsetX = 0;
+  private dragOffsetY = 0;
+
+  // -- Velocity tracking --
+  private velocitySamples: VelocitySample[] = [];
+  private lastPointerX = 0;
+  private lastPointerY = 0;
+  private lastPointerTime = 0;
+
+  // -- Physics state --
+  private vx = 0;
+  private vy = 0;
+  private tickerCallback: ((ticker: Ticker) => void) | null = null;
+
+  // -- Bound event handlers --
   private readonly onPointerDown: (e: PointerEvent) => void;
   private readonly onPointerMove: (e: PointerEvent) => void;
   private readonly onPointerUp: (e: PointerEvent) => void;
@@ -44,153 +66,323 @@ export class DragController {
   constructor(
     stage: MascotStage,
     manager: CharacterManager,
-    dragConfig: DragConfig,
+    config: DisplayConfig,
   ) {
     this.stage = stage;
     this.manager = manager;
-    this.dragConfig = dragConfig;
+    this.config = config;
 
     this.onPointerDown = this.handlePointerDown.bind(this);
     this.onPointerMove = this.handlePointerMove.bind(this);
     this.onPointerUp = this.handlePointerUp.bind(this);
   }
 
-  /** Activate the drag system. */
+  // ---------------------------------------------------------------------------
+  // Lifecycle
+  // ---------------------------------------------------------------------------
+
   async enable(): Promise<void> {
-    // 1. Register pointer event listeners on canvas
     const canvas = this.stage.app.canvas as HTMLCanvasElement;
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerup', this.onPointerUp);
 
-    // 2. Start Rust cursor polling
     await setCursorPolling(true);
 
-    // 3. Send hit zones periodically (characters move, so zones change)
     this.sendHitZones();
     this.hitZoneInterval = setInterval(() => this.sendHitZones(), 500);
 
-    // 4. Subscribe to hover events from Rust
-    this.unlistenHover = await listen<CursorHoverPayload>(
-      'mascot://cursor-hover',
-      (event) => this.handleCursorHover(event.payload),
-    );
+    this.unlistenHover = await onCursorHover((p) => this.handleCursorHover(p));
   }
 
-  /** Send current hit zones to Rust. */
+  async destroy(): Promise<void> {
+    const canvas = this.stage.app.canvas as HTMLCanvasElement;
+    canvas.removeEventListener('pointerdown', this.onPointerDown);
+    canvas.removeEventListener('pointermove', this.onPointerMove);
+    canvas.removeEventListener('pointerup', this.onPointerUp);
+
+    if (this.hitZoneInterval) {
+      clearInterval(this.hitZoneInterval);
+      this.hitZoneInterval = null;
+    }
+
+    if (this.unlistenHover) {
+      this.unlistenHover();
+      this.unlistenHover = null;
+    }
+
+    if (this.tickerCallback) {
+      this.stage.app.ticker.remove(this.tickerCallback);
+      this.tickerCallback = null;
+    }
+
+    await setCursorPolling(false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hit zones
+  // ---------------------------------------------------------------------------
+
   private sendHitZones(): void {
     const dpr = window.devicePixelRatio;
     const zones = this.manager.getHitZones(dpr);
     void setHitZones(zones);
   }
 
-  /** Handle hover state change from Rust cursor polling. */
+  // ---------------------------------------------------------------------------
+  // Hover handling (from Rust cursor polling)
+  // ---------------------------------------------------------------------------
+
   private handleCursorHover(payload: CursorHoverPayload): void {
-    // Ignore hover changes during drag (click-through already disabled)
-    if (this.draggedCharacter) return;
+    // 드래그/물리 진행 중이면 hover 무시
+    if (this.phase !== 'idle') return;
 
     if (payload.hovered_agent_id) {
-      // Cursor is over a character → disable click-through
-      if (!this.hoveredCharacter) {
+      if (!this.hoveredAgentId) {
         void toggleClickThrough(false);
       }
-      this.hoveredCharacter = this.manager.getCharacter(payload.hovered_agent_id);
+      this.hoveredAgentId = payload.hovered_agent_id;
     } else {
-      // Cursor left all characters → restore click-through
-      if (this.hoveredCharacter) {
+      if (this.hoveredAgentId) {
         void toggleClickThrough(true);
-        this.hoveredCharacter = null;
+        this.hoveredAgentId = null;
       }
     }
   }
 
-  /** pointerdown: start dragging. */
-  private handlePointerDown(e: PointerEvent): void {
-    if (!this.hoveredCharacter) return;
+  // ---------------------------------------------------------------------------
+  // Pointer event handlers
+  // ---------------------------------------------------------------------------
 
-    const character = this.hoveredCharacter;
+  private handlePointerDown(e: PointerEvent): void {
+    if (!this.hoveredAgentId) return;
+
+    const character = this.manager.getCharacter(this.hoveredAgentId);
+    if (!character) return;
+
+    this.phase = 'dragging';
     this.draggedCharacter = character;
 
-    // Cancel any in-progress movement
+    // 진행 중인 이동 취소
     this.manager.cancelMovement(character.agentId);
 
-    // Calculate cursor-character offset (CSS pixels)
+    // 오프셋 계산 (CSS 픽셀)
     this.dragOffsetX = e.clientX - character.container.x;
+    this.dragOffsetY = e.clientY - character.container.y;
 
-    // Start grabbed animation
+    // grabbed 애니메이션
     character.startDrag();
 
-    // Capture pointer for reliable move/up tracking
+    // 속도 샘플 초기화
+    this.velocitySamples = [];
+    this.lastPointerX = e.clientX;
+    this.lastPointerY = e.clientY;
+    this.lastPointerTime = performance.now();
+
+    // 포인터 캡처
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
 
-  /** pointermove: move character while dragging. */
   private handlePointerMove(e: PointerEvent): void {
-    if (!this.draggedCharacter) return;
+    if (this.phase !== 'dragging' || !this.draggedCharacter) return;
 
-    const newX = e.clientX - this.dragOffsetX;
+    const now = performance.now();
+    const dt = now - this.lastPointerTime;
+
+    // 속도 샘플 기록
+    if (dt > 0) {
+      this.velocitySamples.push({
+        dx: e.clientX - this.lastPointerX,
+        dy: e.clientY - this.lastPointerY,
+        dt,
+      });
+      // 최근 N개만 유지
+      if (this.velocitySamples.length > this.config.drag_velocity_samples) {
+        this.velocitySamples.shift();
+      }
+    }
+
+    this.lastPointerX = e.clientX;
+    this.lastPointerY = e.clientY;
+    this.lastPointerTime = now;
+
+    // 캐릭터 위치 업데이트 (화면 경계 클램프)
+    const newX = clamp(e.clientX - this.dragOffsetX, 0, window.innerWidth);
+    const newY = clamp(e.clientY - this.dragOffsetY, 0, this.stage.groundY);
+
     this.draggedCharacter.container.x = newX;
+    this.draggedCharacter.container.y = newY;
+  }
 
-    if (!this.dragConfig.snap_to_ground) {
-      this.draggedCharacter.container.y = e.clientY;
+  private handlePointerUp(_e: PointerEvent): void {
+    if (this.phase !== 'dragging' || !this.draggedCharacter) return;
+
+    // 릴리스 속도 계산
+    const vel = this.computeReleaseVelocity();
+    this.vx = vel.vx;
+    this.vy = vel.vy;
+
+    const character = this.draggedCharacter;
+    character.endDrag();
+
+    // 바닥에 있으면 바로 착지 처리
+    if (character.container.y >= this.stage.groundY) {
+      this.handleLanding(character);
+      return;
+    }
+
+    // 공중이면 물리 시뮬레이션 시작
+    character.playFalling();
+    this.phase = 'flying';
+    this.startPhysicsTicker();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Physics simulation
+  // ---------------------------------------------------------------------------
+
+  private startPhysicsTicker(): void {
+    if (this.tickerCallback) return;
+
+    this.tickerCallback = (ticker: Ticker) => {
+      this.tickPhysics(ticker.deltaMS / 1000);
+    };
+    this.stage.app.ticker.add(this.tickerCallback);
+  }
+
+  private stopPhysicsTicker(): void {
+    if (this.tickerCallback) {
+      this.stage.app.ticker.remove(this.tickerCallback);
+      this.tickerCallback = null;
     }
   }
 
-  /** pointerup: finish dragging. */
-  private handlePointerUp(_e: PointerEvent): void {
-    if (!this.draggedCharacter) return;
-
+  private tickPhysics(deltaSec: number): void {
     const character = this.draggedCharacter;
-    const droppedX = character.container.x;
-
-    // End grabbed animation, restore previous status animation
-    character.endDrag();
-
-    if (this.dragConfig.return_to_home_on_release) {
-      // Return to original position
-      character.container.x = character.homeX;
-    } else {
-      // Save dropped position as new homeX
-      this.manager.setCharacterHomeX(character.agentId, droppedX);
-      void notifyDragDrop(character.agentId, droppedX);
+    if (!character) {
+      this.stopPhysicsTicker();
+      return;
     }
 
-    // Restore Y to ground level
-    if (this.dragConfig.snap_to_ground) {
-      character.container.y = this.stage.groundY;
+    const groundY = this.stage.groundY;
+
+    if (this.phase === 'flying') {
+      // 중력 적용
+      this.vy += this.config.drag_gravity * deltaSec;
+
+      // 관성 이동
+      this.vx *= this.config.drag_friction;
+      character.container.x += this.vx * deltaSec;
+      character.container.y += this.vy * deltaSec;
+
+      // X 화면 경계
+      if (character.container.x <= 0) {
+        character.container.x = 0;
+        this.vx = 0;
+      } else if (character.container.x >= window.innerWidth) {
+        character.container.x = window.innerWidth;
+        this.vx = 0;
+      }
+
+      // 착지 판정
+      if (character.container.y >= groundY) {
+        character.container.y = groundY;
+        character.playLanding();
+        this.vy = 0;
+        this.phase = 'sliding';
+      }
+    } else if (this.phase === 'sliding') {
+      // 바닥 미끄러짐 (X만)
+      this.vx *= this.config.drag_friction;
+      character.container.x += this.vx * deltaSec;
+
+      // X 화면 경계
+      if (character.container.x <= 0) {
+        character.container.x = 0;
+        this.vx = 0;
+      } else if (character.container.x >= window.innerWidth) {
+        character.container.x = window.innerWidth;
+        this.vx = 0;
+      }
+
+      // 정지 판정
+      if (Math.abs(this.vx) < 1) {
+        this.vx = 0;
+        this.handleLanding(character);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Landing
+  // ---------------------------------------------------------------------------
+
+  private handleLanding(character: SpineCharacter): void {
+    this.stopPhysicsTicker();
+
+    character.container.y = this.stage.groundY;
+
+    // landing 애니메이션이 아직 재생 안 됐으면 재생
+    if (this.phase !== 'sliding') {
+      character.playLanding();
     }
 
+    // 겹침 해소
+    this.manager.resolveOverlap(character.agentId);
+
+    // 새 homeX 저장
+    const finalX = character.container.x;
+    this.manager.setCharacterHomeX(character.agentId, finalX);
+    void notifyDragDrop(character.agentId, finalX);
+
+    // idle 전환 (landing 완료 후)
+    // landing은 0.4초 one-shot -- 완료 후 idle로
+    setTimeout(() => {
+      if (!character.isDragged) {
+        character.transitionTo(character.currentStatus);
+      }
+    }, 400);
+
+    // 상태 초기화
+    this.phase = 'idle';
     this.draggedCharacter = null;
 
-    // Restore click-through
+    // click-through 복원
     void toggleClickThrough(true);
-    this.hoveredCharacter = null;
+    this.hoveredAgentId = null;
 
-    // Immediately refresh hit zones
+    // 히트존 즉시 갱신
     this.sendHitZones();
   }
 
-  /** Deactivate drag system and clean up all resources. */
-  async destroy(): Promise<void> {
-    // Remove pointer event listeners
-    const canvas = this.stage.app.canvas as HTMLCanvasElement;
-    canvas.removeEventListener('pointerdown', this.onPointerDown);
-    canvas.removeEventListener('pointermove', this.onPointerMove);
-    canvas.removeEventListener('pointerup', this.onPointerUp);
+  // ---------------------------------------------------------------------------
+  // Velocity computation
+  // ---------------------------------------------------------------------------
 
-    // Stop hit zone sending
-    if (this.hitZoneInterval) {
-      clearInterval(this.hitZoneInterval);
-      this.hitZoneInterval = null;
+  private computeReleaseVelocity(): { vx: number; vy: number } {
+    if (this.velocitySamples.length === 0) {
+      return { vx: 0, vy: 0 };
     }
 
-    // Unsubscribe hover events
-    if (this.unlistenHover) {
-      this.unlistenHover();
-      this.unlistenHover = null;
+    let totalDx = 0;
+    let totalDy = 0;
+    let totalDt = 0;
+    for (const s of this.velocitySamples) {
+      totalDx += s.dx;
+      totalDy += s.dy;
+      totalDt += s.dt;
     }
 
-    // Stop cursor polling
-    await setCursorPolling(false);
+    if (totalDt === 0) return { vx: 0, vy: 0 };
+
+    const maxSpeed = this.config.drag_max_throw_speed;
+    return {
+      vx: clamp((totalDx / totalDt) * 1000, -maxSpeed, maxSpeed),
+      vy: clamp((totalDy / totalDt) * 1000, -maxSpeed, maxSpeed),
+    };
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }

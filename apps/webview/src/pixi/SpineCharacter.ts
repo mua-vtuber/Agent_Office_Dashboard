@@ -53,7 +53,7 @@ export class SpineCharacter {
 
   set homeX(value: number) {
     this._homeX = value;
-    if (!this._isMoving) {
+    if (!this._isMoving && !this._isDragged) {
       this.container.x = value;
     }
   }
@@ -145,11 +145,26 @@ export class SpineCharacter {
     }
   }
 
-  /** End drag — restore previous status animation, normalize zIndex. */
+  /** End drag — falling 재생 후 landing → idle 전환은 외부(DragController)에서 관리 */
   endDrag(): void {
     this._isDragged = false;
     this.container.zIndex = Z_INDEX.NORMAL;
-    this.transitionTo(this._currentStatus);
+  }
+
+  /** falling 애니메이션 재생 (one-shot) */
+  playFalling(): void {
+    const anim = this.spine.skeleton.data.findAnimation('falling');
+    if (anim) {
+      this.spine.state.setAnimation(0, 'falling', false);
+    }
+  }
+
+  /** landing 애니메이션 재생 (one-shot) */
+  playLanding(): void {
+    const anim = this.spine.skeleton.data.findAnimation('landing');
+    if (anim) {
+      this.spine.state.setAnimation(0, 'landing', false);
+    }
   }
 
   /**

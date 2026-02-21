@@ -71,7 +71,7 @@ function App() {
       if (destroyed) return [];
 
       // 5. 드래그 컨트롤러 초기화
-      const dragController = new DragController(stage, manager, displayConfig.drag);
+      const dragController = new DragController(stage, manager, displayConfig);
       await dragController.enable();
       if (destroyed) {
         await dragController.destroy();

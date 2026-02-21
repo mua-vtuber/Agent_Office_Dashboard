@@ -44,6 +44,8 @@ token = ""
 
 [drag]
 poll_interval_ms = 16
-hit_padding_px = 10
-snap_to_ground = true
-return_to_home_on_release = false
+hit_padding_px = 15
+gravity = 1800.0
+friction = 0.92
+max_throw_speed = 1500.0
+velocity_samples = 5

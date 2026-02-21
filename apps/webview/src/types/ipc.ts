@@ -40,13 +40,6 @@ export interface SettingsChangedPayload {
   value: unknown;
 }
 
-export interface DragConfig {
-  poll_interval_ms: number;
-  hit_padding_px: number;
-  snap_to_ground: boolean;
-  return_to_home_on_release: boolean;
-}
-
 export interface DisplayConfig {
   max_bubble_chars: number;
   bubble_fade_ms: number;
@@ -58,7 +51,13 @@ export interface DisplayConfig {
   walk_speed_px_per_sec: number;
   arrival_distance_px: number;
   behind_scale: number;
-  drag: DragConfig;
+  // 드래그 물리
+  drag_gravity: number;
+  drag_friction: number;
+  drag_max_throw_speed: number;
+  drag_velocity_samples: number;
+  drag_hit_padding_px: number;
+  drag_poll_interval_ms: number;
 }
 
 export interface HitZone {

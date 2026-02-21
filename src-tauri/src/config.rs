@@ -82,8 +82,10 @@ pub struct AuthConfig {
 pub struct DragConfig {
     pub poll_interval_ms: u64,
     pub hit_padding_px: i32,
-    pub snap_to_ground: bool,
-    pub return_to_home_on_release: bool,
+    pub gravity: f64,
+    pub friction: f64,
+    pub max_throw_speed: f64,
+    pub velocity_samples: usize,
 }
 
 impl AppConfig {
@@ -169,6 +171,30 @@ impl AppConfig {
         if self.drag.poll_interval_ms == 0 {
             return Err(ConfigError::Validation {
                 field: "drag.poll_interval_ms".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.drag.gravity <= 0.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.gravity".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.drag.friction <= 0.0 || self.drag.friction >= 1.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.friction".into(),
+                reason: "must be in range (0.0, 1.0)".into(),
+            }
+            .into());
+        }
+
+        if self.drag.velocity_samples == 0 {
+            return Err(ConfigError::Validation {
+                field: "drag.velocity_samples".into(),
                 reason: "must be > 0".into(),
             }
             .into());

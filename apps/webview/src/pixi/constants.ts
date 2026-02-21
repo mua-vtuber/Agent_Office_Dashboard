@@ -38,6 +38,10 @@ export const ANIMATION_MIX_TIMES: Record<string, number> = {
   'walking/chatting': 0.2,
   'chatting/walking': 0.2,
   'walking/idle': 0.2,
+  // 드래그 전환
+  'grabbed/falling': 0.1,
+  'falling/landing': 0,
+  'landing/idle': 0.2,
 };
 
 /** Default mix time for unmapped combinations */
