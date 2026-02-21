@@ -134,8 +134,9 @@ export class DragController {
   // ---------------------------------------------------------------------------
 
   private handleCursorHover(payload: CursorHoverPayload): void {
-    // 드래그/물리 진행 중이면 hover 무시
-    if (this.phase !== 'idle') return;
+    // 드래그 중에만 hover 무시 (이미 잡고 있으니까)
+    // flying/sliding 중에는 허용 → 날아가는 캐릭터를 다시 잡을 수 있음
+    if (this.phase === 'dragging') return;
 
     if (payload.hovered_agent_id) {
       if (!this.hoveredAgentId) {
@@ -159,6 +160,22 @@ export class DragController {
 
     const character = this.manager.getCharacter(this.hoveredAgentId);
     if (!character) return;
+
+    // 물리 시뮬레이션 중이면 즉시 중단
+    if (this.phase === 'flying' || this.phase === 'sliding') {
+      this.stopPhysicsTicker();
+      this.vx = 0;
+      this.vy = 0;
+      // 이전 draggedCharacter와 다른 캐릭터를 잡으면 이전 것을 착지시킴
+      if (this.draggedCharacter && this.draggedCharacter !== character) {
+        this.draggedCharacter.container.y = this.stage.groundY;
+        this.manager.setCharacterHomeX(
+          this.draggedCharacter.agentId,
+          this.draggedCharacter.container.x,
+        );
+        this.draggedCharacter.transitionTo(this.draggedCharacter.currentStatus);
+      }
+    }
 
     this.phase = 'dragging';
     this.draggedCharacter = character;
@@ -248,6 +265,7 @@ export class DragController {
   private startPhysicsTicker(): void {
     if (this.tickerCallback) return;
 
+    this.hitZoneTickCounter = 0;
     this.tickerCallback = (ticker: Ticker) => {
       this.tickPhysics(ticker.deltaMS / 1000);
     };
@@ -261,6 +279,9 @@ export class DragController {
     }
   }
 
+  /** 히트존 갱신 스로틀 — 물리 중 매 프레임이 아닌 ~100ms 간격 */
+  private hitZoneTickCounter = 0;
+
   private tickPhysics(deltaSec: number): void {
     const character = this.draggedCharacter;
     if (!character) {
@@ -269,6 +290,13 @@ export class DragController {
     }
 
     const groundY = this.stage.groundY;
+
+    // 물리 중 히트존 갱신 (~100ms 간격, 60fps 기준 6프레임마다)
+    this.hitZoneTickCounter++;
+    if (this.hitZoneTickCounter >= 6) {
+      this.hitZoneTickCounter = 0;
+      this.sendHitZones();
+    }
 
     if (this.phase === 'flying') {
       // 중력 적용
