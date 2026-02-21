@@ -225,6 +225,10 @@ export class DragController {
     const character = this.draggedCharacter;
     character.endDrag();
 
+    // 손을 놓는 즉시 click-through 복원 — 물리 시뮬레이션에 포인터 입력 불필요
+    void toggleClickThrough(true);
+    this.hoveredAgentId = null;
+
     // 바닥에 있으면 바로 착지 처리
     if (character.container.y >= this.stage.groundY) {
       this.handleLanding(character);
@@ -346,10 +350,6 @@ export class DragController {
     // 상태 초기화
     this.phase = 'idle';
     this.draggedCharacter = null;
-
-    // click-through 복원
-    void toggleClickThrough(true);
-    this.hoveredAgentId = null;
 
     // 히트존 즉시 갱신
     this.sendHitZones();
