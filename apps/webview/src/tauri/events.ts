@@ -5,6 +5,7 @@ import type {
   AgentDepartedPayload,
   ErrorPayload,
   SettingsChangedPayload,
+  CursorHoverPayload,
 } from '../types/ipc';
 
 type EventCallback<T> = (payload: T) => void;
@@ -31,4 +32,8 @@ export async function onOpenResumeModal(cb: () => void): Promise<UnlistenFn> {
 
 export async function onSettingsChanged(cb: EventCallback<SettingsChangedPayload>): Promise<UnlistenFn> {
   return listen<SettingsChangedPayload>('mascot://settings-changed', (event) => cb(event.payload));
+}
+
+export async function onCursorHover(cb: EventCallback<CursorHoverPayload>): Promise<UnlistenFn> {
+  return listen<CursorHoverPayload>('mascot://cursor-hover', (event) => cb(event.payload));
 }

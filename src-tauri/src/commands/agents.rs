@@ -22,6 +22,16 @@ pub struct DisplayConfigResponse {
     pub walk_speed_px_per_sec: f64,
     pub arrival_distance_px: f64,
     pub behind_scale: f64,
+    // 드래그 물리
+    pub drag_gravity: f64,
+    pub drag_friction: f64,
+    pub drag_max_throw_speed: f64,
+    pub drag_velocity_samples: usize,
+    pub drag_hit_padding_px: i32,
+    pub drag_poll_interval_ms: u64,
+    pub drag_bounce_factor: f64,
+    pub drag_collision_padding: f64,
+    pub drag_push_strength: f64,
 }
 
 /// 모든 에이전트 + 현재 상태를 반환 (ipc-protocol.md §3.1)
@@ -154,6 +164,18 @@ pub async fn notify_chat_done(
     process_synthetic_event(&state, &app_handle, &agent_id, EventType::MessageDone).await
 }
 
+/// 드래그 완료 시 캐릭터의 새 home_x를 DB에 저장한다.
+#[tauri::command]
+pub async fn notify_drag_drop(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    new_home_x: f64,
+) -> Result<(), AppError> {
+    let state_repo = StateRepo::new(state.db.clone());
+    state_repo.update_home_x(&agent_id, new_home_x)?;
+    Ok(())
+}
+
 /// 화면 배치 설정 반환 (ipc-protocol.md §3.1)
 /// display + movement 설정을 하나의 응답으로 합산하여 반환
 #[tauri::command]
@@ -162,6 +184,7 @@ pub async fn get_display_config(
 ) -> Result<DisplayConfigResponse, AppError> {
     let d = &state.config.display;
     let m = &state.config.movement;
+    let dr = &state.config.drag;
     Ok(DisplayConfigResponse {
         activity_zone_height_px: d.activity_zone_height_px,
         taskbar_offset_px: d.taskbar_offset_px,
@@ -173,6 +196,15 @@ pub async fn get_display_config(
         walk_speed_px_per_sec: m.walk_speed_px_per_sec,
         arrival_distance_px: m.arrival_distance_px,
         behind_scale: m.behind_scale,
+        drag_gravity: dr.gravity,
+        drag_friction: dr.friction,
+        drag_max_throw_speed: dr.max_throw_speed,
+        drag_velocity_samples: dr.velocity_samples,
+        drag_hit_padding_px: dr.hit_padding_px,
+        drag_poll_interval_ms: dr.poll_interval_ms,
+        drag_bounce_factor: dr.bounce_factor,
+        drag_collision_padding: dr.collision_padding,
+        drag_push_strength: dr.push_strength,
     })
 }
 

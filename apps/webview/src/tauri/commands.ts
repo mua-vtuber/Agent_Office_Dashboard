@@ -1,7 +1,7 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { useErrorStore } from '../stores/error-store';
 import type { MascotAgent, SlotCounts } from '../types/agent';
-import type { DisplayConfig, AgentResume } from '../types/ipc';
+import type { DisplayConfig, AgentResume, HitZone } from '../types/ipc';
 
 async function safeInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
@@ -46,4 +46,16 @@ export function notifyChatDone(agentId: string): Promise<void> {
 
 export function toggleClickThrough(ignore: boolean): Promise<void> {
   return safeInvoke<void>('toggle_click_through', { ignore });
+}
+
+export function setCursorPolling(enabled: boolean): Promise<void> {
+  return safeInvoke<void>('set_cursor_polling', { enabled });
+}
+
+export function setHitZones(zones: HitZone[]): Promise<void> {
+  return safeInvoke<void>('set_hit_zones', { zones });
+}
+
+export function notifyDragDrop(agentId: string, newHomeX: number): Promise<void> {
+  return safeInvoke<void>('notify_drag_drop', { agentId, newHomeX });
 }

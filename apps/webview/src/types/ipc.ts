@@ -51,6 +51,30 @@ export interface DisplayConfig {
   walk_speed_px_per_sec: number;
   arrival_distance_px: number;
   behind_scale: number;
+  // 드래그 물리
+  drag_gravity: number;
+  drag_friction: number;
+  drag_max_throw_speed: number;
+  drag_velocity_samples: number;
+  drag_hit_padding_px: number;
+  drag_poll_interval_ms: number;
+  drag_bounce_factor: number;
+  drag_collision_padding: number;
+  drag_push_strength: number;
+}
+
+export interface HitZone {
+  agent_id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface CursorHoverPayload {
+  hovered_agent_id: string | null;
+  cursor_x: number;
+  cursor_y: number;
 }
 
 export interface AgentResume {

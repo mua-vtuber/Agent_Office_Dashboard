@@ -30,6 +30,7 @@ export class SpineCharacter {
 
   private _homeX = 0;
   private _isMoving = false;
+  private _isDragged = false;
   private _currentStatus: AgentStatus = 'offline';
 
   constructor(skeletonData: SkeletonData, agentId: string, appearance: AppearanceProfile) {
@@ -52,7 +53,7 @@ export class SpineCharacter {
 
   set homeX(value: number) {
     this._homeX = value;
-    if (!this._isMoving) {
+    if (!this._isMoving && !this._isDragged) {
       this.container.x = value;
     }
   }
@@ -64,6 +65,11 @@ export class SpineCharacter {
 
   set isMoving(value: boolean) {
     this._isMoving = value;
+  }
+
+  /** Whether the character is currently being dragged. */
+  get isDragged(): boolean {
+    return this._isDragged;
   }
 
   /** Current status of the character. */
@@ -124,6 +130,55 @@ export class SpineCharacter {
 
     const loop = LOOPING_ANIMATIONS.has(animationName);
     this.spine.state.setAnimation(0, animationName, loop);
+  }
+
+  /** Start drag — play grabbed animation, raise zIndex. */
+  startDrag(): void {
+    this._isDragged = true;
+    this._isMoving = false;
+    this.container.zIndex = Z_INDEX.DRAGGED;
+
+    // grabbed 애니메이션이 있으면 재생, 없으면 현재 유지
+    const grabAnim = this.spine.skeleton.data.findAnimation('grabbed');
+    if (grabAnim) {
+      this.spine.state.setAnimation(0, 'grabbed', true);
+    }
+  }
+
+  /** End drag — falling 재생 후 landing → idle 전환은 외부(DragController)에서 관리 */
+  endDrag(): void {
+    this._isDragged = false;
+    this.container.zIndex = Z_INDEX.NORMAL;
+  }
+
+  /** falling 애니메이션 재생 (one-shot) */
+  playFalling(): void {
+    const anim = this.spine.skeleton.data.findAnimation('falling');
+    if (anim) {
+      this.spine.state.setAnimation(0, 'falling', false);
+    }
+  }
+
+  /** landing 애니메이션 재생 (one-shot) */
+  playLanding(): void {
+    const anim = this.spine.skeleton.data.findAnimation('landing');
+    if (anim) {
+      this.spine.state.setAnimation(0, 'landing', false);
+    }
+  }
+
+  /**
+   * Return bounding box in physical pixel coordinates.
+   * Used by DragController to send hit zones to Rust.
+   */
+  getPhysicalBounds(dpr: number): { x: number; y: number; width: number; height: number } {
+    const b = this.container.getBounds();
+    return {
+      x: Math.round(b.x * dpr),
+      y: Math.round(b.y * dpr),
+      width: Math.round(b.width * dpr),
+      height: Math.round(b.height * dpr),
+    };
   }
 
   /**

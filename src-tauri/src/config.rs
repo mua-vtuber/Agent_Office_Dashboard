@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub appearance: AppearanceConfig,
     pub resume: ResumeConfig,
     pub auth: AuthConfig,
+    pub drag: DragConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -75,6 +76,20 @@ pub struct ResumeConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct AuthConfig {
     pub token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct DragConfig {
+    pub poll_interval_ms: u64,
+    pub hit_padding_px: i32,
+    pub gravity: f64,
+    pub friction: f64,
+    pub max_throw_speed: f64,
+    pub velocity_samples: usize,
+    // v2: bounce, collision, push
+    pub bounce_factor: f64,
+    pub collision_padding: f64,
+    pub push_strength: f64,
 }
 
 impl AppConfig {
@@ -153,6 +168,54 @@ impl AppConfig {
             return Err(ConfigError::Validation {
                 field: "appearance.skin_saturation".into(),
                 reason: "values must be in range [0.0, 100.0]".into(),
+            }
+            .into());
+        }
+
+        if self.drag.poll_interval_ms == 0 {
+            return Err(ConfigError::Validation {
+                field: "drag.poll_interval_ms".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.drag.gravity <= 0.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.gravity".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.drag.friction <= 0.0 || self.drag.friction >= 1.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.friction".into(),
+                reason: "must be in range (0.0, 1.0)".into(),
+            }
+            .into());
+        }
+
+        if self.drag.velocity_samples == 0 {
+            return Err(ConfigError::Validation {
+                field: "drag.velocity_samples".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.drag.bounce_factor < 0.0 || self.drag.bounce_factor > 1.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.bounce_factor".into(),
+                reason: "must be in range [0.0, 1.0]".into(),
+            }
+            .into());
+        }
+
+        if self.drag.push_strength <= 0.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.push_strength".into(),
+                reason: "must be > 0".into(),
             }
             .into());
         }
