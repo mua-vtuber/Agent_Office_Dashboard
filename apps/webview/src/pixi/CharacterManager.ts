@@ -243,6 +243,58 @@ export class CharacterManager {
   }
 
   /**
+   * Return a SpineCharacter by agent_id, or null if not found.
+   * Used by DragController to access the character instance.
+   */
+  getCharacter(agentId: string): SpineCharacter | null {
+    const entry = this.characters.get(agentId);
+    return entry?.character ?? null;
+  }
+
+  /**
+   * Return hit zones for all characters in physical pixel coordinates.
+   * Used by DragController to send to Rust for cursor polling.
+   */
+  getHitZones(dpr: number): Array<{ agent_id: string; x: number; y: number; width: number; height: number }> {
+    const zones: Array<{ agent_id: string; x: number; y: number; width: number; height: number }> = [];
+    for (const [agentId, entry] of this.characters) {
+      const bounds = entry.character.getPhysicalBounds(dpr);
+      zones.push({ agent_id: agentId, ...bounds });
+    }
+    return zones;
+  }
+
+  /**
+   * Cancel an in-progress movement for a character.
+   * Called when drag starts while the character is walking/returning.
+   */
+  cancelMovement(agentId: string): void {
+    this.movingAgents.delete(agentId);
+
+    const entry = this.characters.get(agentId);
+    if (entry) {
+      entry.character.isMoving = false;
+      entry.character.container.zIndex = Z_INDEX.NORMAL;
+      entry.character.container.scale.set(1, 1);
+    }
+
+    if (this.movingAgents.size === 0 && this.tickerCallback) {
+      this.stage.app.ticker.remove(this.tickerCallback);
+      this.tickerCallback = null;
+    }
+  }
+
+  /**
+   * Update a character's homeX position.
+   * Called after drag drop to persist the new position.
+   */
+  setCharacterHomeX(agentId: string, newX: number): void {
+    const entry = this.characters.get(agentId);
+    if (!entry) return;
+    entry.character.homeX = newX;
+  }
+
+  /**
    * Begin walking a character toward a peer character.
    * Lowers z-index (passes BEHIND other characters) and applies perspective scale.
    * Facing direction is set based on movement direction.
@@ -513,11 +565,17 @@ export class CharacterManager {
         if (!entry) continue;
 
         const charX = groupStartX + i * character_spacing_px;
-        entry.character.homeX = charX;
-        entry.character.container.y = groundY;
 
-        // Position bubble above character
-        entry.bubble.container.x = charX;
+        // Skip position update for dragged characters
+        if (!entry.character.isDragged) {
+          entry.character.homeX = charX;
+          entry.character.container.y = groundY;
+        }
+
+        // Position bubble: follow actual character position if dragged, otherwise use layout position
+        entry.bubble.container.x = entry.character.isDragged
+          ? entry.character.container.x
+          : charX;
         entry.bubble.container.y = groundY - this.stage.activityZoneHeight;
       }
 
