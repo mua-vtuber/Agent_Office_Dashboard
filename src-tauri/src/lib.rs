@@ -150,6 +150,7 @@ pub fn run() {
             commands::agents::notify_movement_done,
             commands::agents::notify_chat_done,
             commands::agents::get_display_config,
+            commands::agents::notify_drag_drop,
             commands::window::toggle_click_through,
             commands::window::get_cursor_pos,
             commands::window::set_cursor_polling,

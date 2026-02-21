@@ -90,6 +90,19 @@ impl StateRepo {
         }
     }
 
+    /// 드래그 드롭 후 캐릭터의 home_x만 업데이트한다.
+    pub fn update_home_x(&self, agent_id: &str, home_x: f64) -> Result<(), AppError> {
+        let conn = self
+            .db
+            .lock()
+            .map_err(|e| AppError::LockPoisoned(e.to_string()))?;
+        conn.execute(
+            "UPDATE agent_state SET home_x = ?1 WHERE agent_id = ?2",
+            rusqlite::params![home_x, agent_id],
+        )?;
+        Ok(())
+    }
+
     pub fn get_all(&self) -> Result<Vec<AgentState>, AppError> {
         let conn = self.db.lock().map_err(|e| AppError::LockPoisoned(e.to_string()))?;
         let mut stmt = conn.prepare(

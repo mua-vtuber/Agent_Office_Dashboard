@@ -1,3 +1,4 @@
+use crate::config::DragConfig;
 use crate::error::AppError;
 use crate::models::agent::*;
 use crate::models::event::*;
@@ -22,6 +23,7 @@ pub struct DisplayConfigResponse {
     pub walk_speed_px_per_sec: f64,
     pub arrival_distance_px: f64,
     pub behind_scale: f64,
+    pub drag: DragConfig,
 }
 
 /// 모든 에이전트 + 현재 상태를 반환 (ipc-protocol.md §3.1)
@@ -154,6 +156,18 @@ pub async fn notify_chat_done(
     process_synthetic_event(&state, &app_handle, &agent_id, EventType::MessageDone).await
 }
 
+/// 드래그 완료 시 캐릭터의 새 home_x를 DB에 저장한다.
+#[tauri::command]
+pub async fn notify_drag_drop(
+    state: tauri::State<'_, AppState>,
+    agent_id: String,
+    new_home_x: f64,
+) -> Result<(), AppError> {
+    let state_repo = StateRepo::new(state.db.clone());
+    state_repo.update_home_x(&agent_id, new_home_x)?;
+    Ok(())
+}
+
 /// 화면 배치 설정 반환 (ipc-protocol.md §3.1)
 /// display + movement 설정을 하나의 응답으로 합산하여 반환
 #[tauri::command]
@@ -173,6 +187,7 @@ pub async fn get_display_config(
         walk_speed_px_per_sec: m.walk_speed_px_per_sec,
         arrival_distance_px: m.arrival_distance_px,
         behind_scale: m.behind_scale,
+        drag: state.config.drag.clone(),
     })
 }
 
