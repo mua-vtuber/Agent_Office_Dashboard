@@ -36,6 +36,13 @@ pub fn on_event(
         return apply_transition(state, AgentStatus::Disappearing, &event.ts, &prev);
     }
 
+    // Offline 에이전트에게 활동 이벤트가 오면 → Appearing
+    // AgentStarted뿐 아니라 어떤 hook type이든 첫 이벤트로 등장 트리거
+    // (Heartbeat과 AgentStopped는 이미 위에서 처리됨)
+    if prev == AgentStatus::Offline {
+        return apply_transition(state, AgentStatus::Appearing, &event.ts, &prev);
+    }
+
     // 전이 매트릭스 조회
     if let Some(next) = find_transition(&prev, &event.event_type, event, config, consecutive_failures) {
         // 특수 처리: walking 전 prev_status 저장
@@ -432,12 +439,20 @@ mod tests {
     // === no-op ===
 
     #[test]
-    fn test_noop_transition() {
-        let mut state = make_state(AgentStatus::Offline);
-        let event = make_event(EventType::ToolStarted);
-        let result = on_event(&event, &mut state, &test_config(), 0);
-        assert!(matches!(result, TransitionResult::NoOp));
-        assert_eq!(state.status, AgentStatus::Offline);
+    fn test_offline_any_activity_to_appearing() {
+        // Offline 에이전트에게 어떤 활동 이벤트든 오면 Appearing으로 전이
+        for event_type in [
+            EventType::ToolStarted,
+            EventType::ToolSucceeded,
+            EventType::TaskStarted,
+            EventType::ThinkingUpdated,
+        ] {
+            let mut state = make_state(AgentStatus::Offline);
+            let event = make_event(event_type);
+            let result = on_event(&event, &mut state, &test_config(), 0);
+            assert!(matches!(result, TransitionResult::Changed { .. }));
+            assert_eq!(state.status, AgentStatus::Appearing);
+        }
     }
 
     #[test]
