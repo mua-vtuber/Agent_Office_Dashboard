@@ -300,34 +300,6 @@ export class CharacterManager {
   }
 
   /**
-   * 착지한 캐릭터와 겹치는 다른 캐릭터들을 밀어낸다.
-   * character_spacing_px 미만 거리의 캐릭터를 바깥으로 밀어냄.
-   */
-  resolveOverlap(droppedAgentId: string): void {
-    const droppedEntry = this.characters.get(droppedAgentId);
-    if (!droppedEntry) return;
-
-    const droppedX = droppedEntry.character.container.x;
-    const spacing = this.displayConfig.character_spacing_px;
-
-    for (const [agentId, entry] of this.characters) {
-      if (agentId === droppedAgentId) continue;
-      if (entry.character.isDragged) continue;
-
-      const otherX = entry.character.container.x;
-      const distance = Math.abs(otherX - droppedX);
-
-      if (distance < spacing) {
-        // 같은 위치면 오른쪽으로 밀기
-        const direction = otherX >= droppedX ? 1 : -1;
-        const newX = droppedX + direction * spacing;
-        entry.character.homeX = newX;
-        entry.bubble.container.x = newX;
-      }
-    }
-  }
-
-  /**
    * Begin walking a character toward a peer character.
    * Lowers z-index (passes BEHIND other characters) and applies perspective scale.
    * Facing direction is set based on movement direction.
