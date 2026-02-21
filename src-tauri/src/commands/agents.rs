@@ -29,6 +29,9 @@ pub struct DisplayConfigResponse {
     pub drag_velocity_samples: usize,
     pub drag_hit_padding_px: i32,
     pub drag_poll_interval_ms: u64,
+    pub drag_bounce_factor: f64,
+    pub drag_collision_padding: f64,
+    pub drag_push_strength: f64,
 }
 
 /// 모든 에이전트 + 현재 상태를 반환 (ipc-protocol.md §3.1)
@@ -199,6 +202,9 @@ pub async fn get_display_config(
         drag_velocity_samples: dr.velocity_samples,
         drag_hit_padding_px: dr.hit_padding_px,
         drag_poll_interval_ms: dr.poll_interval_ms,
+        drag_bounce_factor: dr.bounce_factor,
+        drag_collision_padding: dr.collision_padding,
+        drag_push_strength: dr.push_strength,
     })
 }
 

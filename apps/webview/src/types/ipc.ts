@@ -58,6 +58,9 @@ export interface DisplayConfig {
   drag_velocity_samples: number;
   drag_hit_padding_px: number;
   drag_poll_interval_ms: number;
+  drag_bounce_factor: number;
+  drag_collision_padding: number;
+  drag_push_strength: number;
 }
 
 export interface HitZone {

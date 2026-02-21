@@ -86,6 +86,10 @@ pub struct DragConfig {
     pub friction: f64,
     pub max_throw_speed: f64,
     pub velocity_samples: usize,
+    // v2: bounce, collision, push
+    pub bounce_factor: f64,
+    pub collision_padding: f64,
+    pub push_strength: f64,
 }
 
 impl AppConfig {
@@ -195,6 +199,22 @@ impl AppConfig {
         if self.drag.velocity_samples == 0 {
             return Err(ConfigError::Validation {
                 field: "drag.velocity_samples".into(),
+                reason: "must be > 0".into(),
+            }
+            .into());
+        }
+
+        if self.drag.bounce_factor < 0.0 || self.drag.bounce_factor > 1.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.bounce_factor".into(),
+                reason: "must be in range [0.0, 1.0]".into(),
+            }
+            .into());
+        }
+
+        if self.drag.push_strength <= 0.0 {
+            return Err(ConfigError::Validation {
+                field: "drag.push_strength".into(),
                 reason: "must be > 0".into(),
             }
             .into());
