@@ -128,6 +128,7 @@ pub fn run() {
             commands::agents::notify_chat_done,
             commands::agents::get_display_config,
             commands::window::toggle_click_through,
+            commands::window::get_cursor_pos,
         ])
         .run(tauri::generate_context!())
         .expect("Fatal: failed to start tauri application");
