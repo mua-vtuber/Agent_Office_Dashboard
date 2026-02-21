@@ -1,4 +1,6 @@
 use crate::error::AppError;
+use crate::services::cursor_poll::HitZone;
+use crate::AppState;
 
 #[tauri::command]
 pub async fn toggle_click_through(
@@ -32,4 +34,27 @@ pub async fn get_cursor_pos() -> Result<(i32, i32), AppError> {
             "cursor polling is only supported on Windows",
         )))
     }
+}
+
+#[tauri::command]
+pub async fn set_cursor_polling(
+    state: tauri::State<'_, AppState>,
+    enabled: bool,
+) -> Result<(), AppError> {
+    state
+        .cursor_polling_active
+        .store(enabled, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_hit_zones(
+    state: tauri::State<'_, AppState>,
+    zones: Vec<HitZone>,
+) -> Result<(), AppError> {
+    let mut locked = state.hit_zones.lock().map_err(|e| {
+        AppError::LockPoisoned(format!("hit_zones lock poisoned: {e}"))
+    })?;
+    *locked = zones;
+    Ok(())
 }

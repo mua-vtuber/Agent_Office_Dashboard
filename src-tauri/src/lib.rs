@@ -13,6 +13,7 @@ pub use error::{AppError, ConfigError};
 pub use state::AppState;
 
 use models::agent::SlotCounts;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -62,10 +63,15 @@ pub fn run() {
                 .map_err(|e| format!("DB init failed: {e}"))?;
 
             // 3. AppState 생성 + managed state 등록
+            let cursor_polling_active = Arc::new(AtomicBool::new(false));
+            let hit_zones = Arc::new(Mutex::new(Vec::new()));
+
             let app_state = AppState {
                 db: db.clone(),
                 config: Arc::new(config.clone()),
                 slot_counts: Arc::new(Mutex::new(SlotCounts::default())),
+                cursor_polling_active: cursor_polling_active.clone(),
+                hit_zones: hit_zones.clone(),
             };
             app.manage(app_state.clone());
 
@@ -92,7 +98,24 @@ pub fn run() {
                 services::heartbeat::run_heartbeat(heartbeat_state, heartbeat_handle).await;
             });
 
-            // 6. 창 설정 — 전체 화면 크기 + 클릭 통과
+            // 6. 커서 폴링 서비스 시작
+            let poll_handle = app.handle().clone();
+            let poll_active = cursor_polling_active.clone();
+            let poll_zones = hit_zones.clone();
+            let poll_interval = config.drag.poll_interval_ms;
+            let poll_padding = config.drag.hit_padding_px;
+            tauri::async_runtime::spawn(async move {
+                services::cursor_poll::run_cursor_poll(
+                    poll_handle,
+                    poll_active,
+                    poll_interval,
+                    poll_zones,
+                    poll_padding,
+                )
+                .await;
+            });
+
+            // 7. 창 설정 — 전체 화면 크기 + 클릭 통과
             if let Some(window) = app.get_webview_window("main") {
                 // 모니터 크기에 맞춰 창 위치/크기 설정 (fullscreen 대신)
                 if let Ok(monitor) = window.current_monitor() {
@@ -114,7 +137,7 @@ pub fn run() {
                 }
             }
 
-            // 7. 시스템 트레이
+            // 8. 시스템 트레이
             tray::setup_tray(app).map_err(|e| e.to_string())?;
 
             Ok(())
@@ -129,6 +152,8 @@ pub fn run() {
             commands::agents::get_display_config,
             commands::window::toggle_click_through,
             commands::window::get_cursor_pos,
+            commands::window::set_cursor_polling,
+            commands::window::set_hit_zones,
         ])
         .run(tauri::generate_context!())
         .expect("Fatal: failed to start tauri application");
