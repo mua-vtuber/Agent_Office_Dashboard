@@ -11,7 +11,7 @@ import {
   onOpenResumeModal,
   onSettingsChanged,
 } from './tauri/events';
-import { MascotStage, CharacterManager } from './pixi';
+import { MascotStage, CharacterManager, DragController } from './pixi';
 import ErrorToast from './components/ErrorToast';
 import ErrorOverlay from './components/ErrorOverlay';
 import ResumeModal from './components/ResumeModal';
@@ -20,6 +20,7 @@ function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<MascotStage | null>(null);
   const managerRef = useRef<CharacterManager | null>(null);
+  const dragRef = useRef<DragController | null>(null);
   const [fatalError, setFatalError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -69,7 +70,16 @@ function App() {
       await toggleClickThrough(true);
       if (destroyed) return [];
 
-      // 5. 기존 에이전트 복원 — store + CharacterManager 동시 추가
+      // 5. 드래그 컨트롤러 초기화
+      const dragController = new DragController(stage, manager, displayConfig.drag);
+      await dragController.enable();
+      if (destroyed) {
+        await dragController.destroy();
+        return [];
+      }
+      dragRef.current = dragController;
+
+      // 6. 기존 에이전트 복원 — store + CharacterManager 동시 추가
       const existingAgents = await getAllAgents();
       if (!destroyed) {
         for (const agent of existingAgents) {
@@ -78,7 +88,7 @@ function App() {
         }
       }
 
-      // 5. Tauri 이벤트 리스너 등록
+      // 7. Tauri 이벤트 리스너 등록
       const unlisteners = await Promise.all([
         onAgentAppeared((p) => {
           if (destroyed) return;
@@ -149,9 +159,15 @@ function App() {
       return [];
     });
 
-    // 6. 클린업
+    // 8. 클린업
     return () => {
       destroyed = true;
+
+      // DragController 정리
+      if (dragRef.current) {
+        void dragRef.current.destroy();
+        dragRef.current = null;
+      }
 
       // CharacterManager 정리
       if (managerRef.current) {
