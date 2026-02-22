@@ -14,7 +14,7 @@ import { STATUS_BUBBLE_VISIBILITY, Z_INDEX } from './constants';
 import { MascotStage } from './MascotStage';
 import { SpineCharacter } from './SpineCharacter';
 import { SpeechBubble } from './SpeechBubble';
-import { WorkspaceLabel } from './WorkspaceLabel';
+import { AgentNameTag } from './AgentNameTag';
 
 /** Spine asset paths served from the public directory */
 const SPINE_SKELETON_ALIAS = 'character-skeleton';
@@ -35,13 +35,13 @@ const SKIN_PREFIXES: Record<keyof SlotCounts, string> = {
 };
 
 interface WorkspaceGroup {
-  label: WorkspaceLabel;
   agentIds: string[];
 }
 
 interface CharacterEntry {
   character: SpineCharacter;
   bubble: SpeechBubble;
+  nameTag: AgentNameTag;
   workspaceId: string;
 }
 
@@ -133,6 +133,10 @@ export class CharacterManager {
     const bubble = new SpeechBubble();
     bubble.setMaxChars(this.displayConfig.max_bubble_chars);
 
+    // Create AgentNameTag (child of character container — auto-follows drag/physics)
+    const nameTag = new AgentNameTag(agent.display_name, agent.workspace_id);
+    character.attachNameTag(nameTag);
+
     // Add to PixiJS stage
     this.stage.app.stage.addChild(character.container);
     this.stage.app.stage.addChild(bubble.container);
@@ -141,6 +145,7 @@ export class CharacterManager {
     const entry: CharacterEntry = {
       character,
       bubble,
+      nameTag,
       workspaceId: agent.workspace_id,
     };
     this.characters.set(agent.agent_id, entry);
@@ -176,6 +181,7 @@ export class CharacterManager {
       this.removeFromWorkspaceGroup(payload.agent_id, entry.workspaceId);
       entry.workspaceId = payload.workspace_id;
       this.addToWorkspaceGroup(payload.agent_id, payload.workspace_id);
+      entry.nameTag.setWorkspace(payload.workspace_id);
       this.recalculatePositions();
     }
 
@@ -215,6 +221,7 @@ export class CharacterManager {
     // Destroy instances
     entry.character.destroy();
     entry.bubble.destroy();
+    entry.nameTag.destroy();
 
     // Remove from workspace group
     this.removeFromWorkspaceGroup(agentId, entry.workspaceId);
@@ -468,10 +475,6 @@ export class CharacterManager {
     for (const agentId of agentIds) {
       this.removeAgent(agentId);
     }
-    // removeAgent already cleans up workspace groups, but ensure labels are gone
-    for (const group of this.workspaceGroups.values()) {
-      group.label.destroy();
-    }
     this.workspaceGroups.clear();
   }
 
@@ -485,9 +488,7 @@ export class CharacterManager {
   private addToWorkspaceGroup(agentId: string, workspaceId: string): void {
     let group = this.workspaceGroups.get(workspaceId);
     if (!group) {
-      const label = new WorkspaceLabel(workspaceId);
-      this.stage.app.stage.addChild(label.container);
-      group = { label, agentIds: [] };
+      group = { agentIds: [] };
       this.workspaceGroups.set(workspaceId, group);
     }
     if (!group.agentIds.includes(agentId)) {
@@ -505,8 +506,6 @@ export class CharacterManager {
     group.agentIds = group.agentIds.filter((id) => id !== agentId);
 
     if (group.agentIds.length === 0) {
-      this.stage.app.stage.removeChild(group.label.container);
-      group.label.destroy();
       this.workspaceGroups.delete(workspaceId);
     }
   }
@@ -584,11 +583,6 @@ export class CharacterManager {
         entry.bubble.container.y = groundY - this.stage.activityZoneHeight;
       }
 
-      // Position workspace label centered above the group
-      const groupCenterX = groupStartX + groupWidth / 2;
-      const topY = groundY - this.stage.activityZoneHeight;
-      group.label.updatePosition(groupCenterX, topY);
-
       currentX += groupWidth + group_spacing_px;
       groupIndex++;
     }
@@ -616,6 +610,7 @@ export class CharacterManager {
     const shouldShow = STATUS_BUBBLE_VISIBILITY[status];
     if (!shouldShow) {
       entry.bubble.hide();
+      entry.nameTag.container.visible = true;
       return;
     }
 
@@ -648,8 +643,12 @@ export class CharacterManager {
         break;
       default:
         entry.bubble.hide();
-        break;
+        entry.nameTag.container.visible = true;
+        return;
     }
+
+    // Hide name tag when bubble is visible
+    entry.nameTag.container.visible = false;
   }
 
   // ---------------------------------------------------------------------------

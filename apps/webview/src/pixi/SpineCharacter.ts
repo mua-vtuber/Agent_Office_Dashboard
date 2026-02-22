@@ -1,6 +1,7 @@
 import { Spine, Skin, SkeletonData, TrackEntry } from '@esotericsoftware/spine-pixi-v8';
 import { Container } from 'pixi.js';
 import type { AgentStatus, AppearanceProfile } from '../types/agent';
+import { AgentNameTag } from './AgentNameTag';
 import { notifyAnimationDone } from '../tauri/commands';
 import { useErrorStore } from '../stores/error-store';
 import {
@@ -32,6 +33,7 @@ export class SpineCharacter {
   private _isMoving = false;
   private _isDragged = false;
   private _currentStatus: AgentStatus = 'offline';
+  private _nameTag: AgentNameTag | null = null;
 
   constructor(skeletonData: SkeletonData, agentId: string, appearance: AppearanceProfile) {
     this.agentId = agentId;
@@ -75,6 +77,18 @@ export class SpineCharacter {
   /** Current status of the character. */
   get currentStatus(): AgentStatus {
     return this._currentStatus;
+  }
+
+  /** Get the attached name tag. */
+  get nameTag(): AgentNameTag | null {
+    return this._nameTag;
+  }
+
+  /** Attach an AgentNameTag as a child of the character container. */
+  attachNameTag(nameTag: AgentNameTag): void {
+    this._nameTag = nameTag;
+    this.container.addChild(nameTag.container);
+    this.updateNameTagPosition();
   }
 
   /**
@@ -143,6 +157,8 @@ export class SpineCharacter {
     if (grabAnim) {
       this.spine.state.setAnimation(0, 'grabbed', true);
     }
+
+    this.updateNameTagPosition();
   }
 
   /** End drag — falling 재생 후 landing → idle 전환은 외부(DragController)에서 관리 */
@@ -187,6 +203,10 @@ export class SpineCharacter {
    */
   setFacing(direction: 1 | -1): void {
     this.spine.skeleton.scaleX = Math.abs(this.spine.skeleton.scaleX) * direction;
+    // Counter-flip name tag so text stays readable
+    if (this._nameTag) {
+      this._nameTag.container.scale.x = direction;
+    }
   }
 
   /**
@@ -250,6 +270,15 @@ export class SpineCharacter {
   /** Clean up the container and spine instance. */
   destroy(): void {
     this.spine.state.clearListeners();
+    this._nameTag = null;
     this.container.destroy({ children: true });
+  }
+
+  /** Update name tag Y position based on spine bounds. */
+  private updateNameTagPosition(): void {
+    if (!this._nameTag) return;
+    const bounds = this.spine.getBounds();
+    this._nameTag.container.x = 0;
+    this._nameTag.container.y = -(bounds.height + 4);
   }
 }
